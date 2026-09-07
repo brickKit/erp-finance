@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "erp-finance 事件清单",
+  "note": "Schema 演进铁律：只增不删不改（决策 19）。消费者宽容反序列化。",
+  "envelope": {
+    "description": "所有事件共用的信封。三个 Header 字段由 be-sdk 自动填/校验（§3.10）",
+    "required": ["subject", "aggregate_id", "version", "trace_id", "causation_id", "hop_count", "occurred_at"],
+    "properties": {
+      "subject":      { "type": "string", "pattern": "^[a-z]+\\.[a-z-]+\\.[a-z-]+\\.v[0-9]+$" },
+      "aggregate_id": { "type": "string" },
+      "version":      { "type": "integer", "description": "消费者只在严格大于本地当前值时更新（决策 43）" },
+      "trace_id":     { "type": "string" },
+      "causation_id": { "type": "string" },
+      "hop_count":    { "type": "integer", "maximum": 5, "description": "> 5 直接丢弃进 DLQ（决策 42）" },
+      "occurred_at":  { "type": "string", "format": "date-time" }
+    }
+  },
+  "events": [
+    {
+      "subject": "finance.voucher.posted.v1",
+      "grade": "peripheral",
+      "note": "旁路分析事件（§3.10 事件分级）：凭证过账后发，供报表/分析类下游订阅，不进核心交易链路。",
+      "payload": {
+        "type": "object",
+        "required": ["entry_id", "entry_no", "post_no", "period", "amount"],
+        "properties": {
+          "entry_id":  { "type": "string" },
+          "entry_no":  { "type": "string" },
+          "post_no":   { "type": "string" },
+          "period":    { "type": "string" },
+          "amount":    { "type": "string", "description": "decimal-as-string" }
+        }
+      }
+    },
+    {
+      "subject": "finance.credit.rejected.v1",
+      "grade": "core",
+      "note": "核心交易事件：必须持久化、幂等、进死信队列（§3.10 事件分级）。⚠️ 本阶段唯一一条'事件反向流回上游'的边——消费者是 erp-sales（设计计划 §4.3 事件图），收到后把订单转为挂起。",
+      "payload": {
+        "type": "object",
+        "required": ["customer_id", "order_id", "exposure", "limit"],
+        "properties": {
+          "customer_id": { "type": "string" },
+          "order_id":    { "type": "string" },
+          "exposure":    { "type": "string", "description": "过账后的已用额度，decimal-as-string" },
+          "limit":       { "type": "string", "description": "客户的额度值，decimal-as-string" }
+        }
+      }
+    }
+  ]
+}
