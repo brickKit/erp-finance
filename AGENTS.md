@@ -57,6 +57,9 @@
 | 把 `CheckPeriodOpen` 当成权威判定用（比如上游拿到 `OPEN` 就跳过后续校验） | check 与 write 之间有竞态（期间可能正好在这中间关掉）——`CheckPeriodOpen` 只是咨询性的，真正的权威判定在过账事务内部（第 2 层防护）。当成权威判定用会在关账的那一刻窗口期漏过一张单 | 设计计划 §3.1 |
 | 归档 `finance_journal_entry_lines` 时只看时间不看期间状态 | 归档判据是期间 `LOCKED`，不是"够老"——一个 18 个月前但因审计争议还没锁定的期间，一行都不许归档 | 设计计划 §7 |
 | 归档明细时把凭证头也归档 | 头上那条幂等唯一约束必须永远有效，头归档后一张三年前的源单重投事件会重新过一遍账。头不归档、明细归档是刻意的不对称 | 设计计划 §7 |
+| 事件驱动的自动过账（消费 `sales.order.created.v1`/`erp.inventory.adjusted.v1`）用"先插、撞了 `finance_journal_entries_source_uniq` 就捕获错误当作重复"的写法 | PostgreSQL 里一条语句真的执行失败后，**整个事务**会被标记成 aborted，即使 Go 这层选择吞掉那个错误，事务在数据库那侧也回不去了，随后任何语句（含 COMMIT）都会失败。必须先 `SELECT` 判断源单是不是已经处理过，确认没有才真的插入 | `backend/internal/repo/autoentry.go` 的 `findExistingBySource`；同 mdm-product `archive.go` 的既有教训 |
+| `post_no` 生成用 `CREATE SEQUENCE` 或另开一把锁 | 序列在事务回滚时不会把已分配的号退回去（天然留缺口），达不到"同一期间连续无缺口"的审计要求；另开一把锁则是重复造轮子——`postEntryTx` 锁期间行做权威判定本来就已经拿到了这把锁，`post_no` 计数器搭它的便车 | 设计计划 §9 第 7 条；`backend/internal/repo/period.go` 的 `nextPostNo` |
+| 给 `besdk.Consume` 测试的 `aggregate_id` 用固定字符串 | `event_inbox` 按 `(subject, aggregate_id, version)` 单调去重且持久化，第二次跑测试套件时这个组合已经"处理过"，`Consume` 静默跳过、handler 根本不会被调用——断言读到的是"从没处理过"的初始状态，不是真的失败 | `backend/internal/consumer/consumer_test.go`；同 `erp-inventory` 的既有约定 |
 
 ## 改代码前的自查
 

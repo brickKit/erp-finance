@@ -32,6 +32,12 @@ CREATE TABLE accounting_periods (
     start_date      DATE           NOT NULL,
     end_date        DATE           NOT NULL,
     status          TEXT           NOT NULL DEFAULT 'OPEN',
+    -- post_no 的计数器，同一期间内连续无缺口（设计计划 §2.1）。⚠️ 这不是
+    -- Frappe naming series那种"全局热行 + SELECT FOR UPDATE"（设计计划
+    -- §8 明确列为反面教材）——这里的锁范围只是"这一个期间"，不同期间的
+    -- 过账互不阻塞；而"过账时在同一事务里锁住期间行判状态"本来就是
+    -- §3.1 要求的权威判定第二层，计数器搭这个已有的锁便车，不额外加锁。
+    last_post_seq   BIGINT         NOT NULL DEFAULT 0,
     -- §11.2.1 强制字段（status 复用为期间状态，不是另加一列）
     created_at      TIMESTAMPTZ    NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ    NOT NULL DEFAULT now(),
@@ -66,6 +72,11 @@ CREATE UNIQUE INDEX accounts_code_uniq ON accounts (code);
 -- 两个单号分开（设计计划 §2.1）：entry_no 创建时分配，允许有缺口；
 -- post_no 过账时才分配，同一期间内必须连续无缺口（审计要求）——
 -- 阶段二先只保证唯一，连续性留给 Task 14 实现时用同期间内的序列生成。
+--
+-- entry_no 允许有缺口（设计计划 §2.1），用普通序列就够——不像 post_no
+-- 那样需要"同一期间连续"，所以不需要按期间分开、也不需要搭期间行的锁。
+CREATE SEQUENCE entry_no_seq;
+
 CREATE TABLE finance_journal_entries (
     id               BIGSERIAL PRIMARY KEY,
     entry_no         TEXT           NOT NULL,
@@ -116,6 +127,10 @@ CREATE TABLE finance_journal_entry_lines (
     accounting_period TEXT           NOT NULL,
     legal_entity_id   TEXT           NOT NULL,
     account_id        BIGINT         NOT NULL REFERENCES accounts (id),
+    -- ⚠️ 标准版仅支持单币种（设计书 §5.5），但不写这一列是错的——留一个
+    -- 恒为本位币的列，比将来加列便宜两个数量级（阶段计划 Task 14 ④）。
+    -- 不写任何汇率逻辑，多币种走 customer_fork。
+    currency          TEXT           NOT NULL DEFAULT 'CNY',
     debit             NUMERIC(18,2)  NOT NULL DEFAULT 0,
     credit            NUMERIC(18,2)  NOT NULL DEFAULT 0,
     memo              TEXT           NOT NULL DEFAULT '',
@@ -161,6 +176,7 @@ CREATE TABLE ar_ledger (
     customer_id       TEXT           NOT NULL,  -- 不透明外键，来自 mdm-customer
     entry_id          BIGINT         NOT NULL REFERENCES finance_journal_entries (id),
     legal_entity_id   TEXT           NOT NULL,
+    currency          TEXT           NOT NULL DEFAULT 'CNY',  -- 单币种（同上，阶段计划 Task 14 ④）
     amount            NUMERIC(18,2)  NOT NULL,
     reconciled_amount NUMERIC(18,2)  NOT NULL DEFAULT 0,
     -- §11.2.1 强制字段（status 复用为 OPEN/RECONCILED）
@@ -183,6 +199,7 @@ CREATE TABLE ap_ledger (
     supplier_id       TEXT           NOT NULL,
     entry_id          BIGINT         NOT NULL REFERENCES finance_journal_entries (id),
     legal_entity_id   TEXT           NOT NULL,
+    currency          TEXT           NOT NULL DEFAULT 'CNY',  -- 单币种（同上，阶段计划 Task 14 ④）
     amount            NUMERIC(18,2)  NOT NULL,
     reconciled_amount NUMERIC(18,2)  NOT NULL DEFAULT 0,
     created_at        TIMESTAMPTZ    NOT NULL DEFAULT now(),
@@ -201,6 +218,7 @@ CREATE INDEX ap_ledger_supplier ON ap_ledger (supplier_id);
 -- 时机完全不同（设计计划 §9 第 5 条）。
 CREATE TABLE customer_credit_exposure (
     customer_id TEXT           PRIMARY KEY,
+    currency    TEXT           NOT NULL DEFAULT 'CNY',  -- 单币种（同上，阶段计划 Task 14 ④）
     exposure    NUMERIC(18,2)  NOT NULL DEFAULT 0,
     -- §11.2.1 强制字段
     created_at  TIMESTAMPTZ    NOT NULL DEFAULT now(),
