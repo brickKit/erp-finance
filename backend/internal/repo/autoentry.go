@@ -45,11 +45,10 @@ func findExistingBySource(ctx context.Context, tx *sql.Tx, component, docType, d
 
 const defaultLegalEntityID = "default" // 阶段二只有一个默认法人（设计计划 §1）
 
-// SalesOrderEventInput 对应消费 sales.order.created.v1 的载荷。
-//
-// ⚠️ erp-sales 还没建（Task 15-18），这份载荷形状是本组件先按设计计划
-// §4 的描述假定的，不是照抄 erp-sales 已发布的契约——写 erp-sales 的
-// 事件契约时要回头对一遍，形状不一致就以 erp-sales 的为准改这里。
+// SalesOrderEventInput 是消费 sales.order.created.v1 的载荷解析成的入参。
+// LegalEntityID 留着给测试/PostSalesOrderEntry 直调时显式指定用——真实
+// 事件消费路径（backend/internal/consumer）永远传空字符串，erp-sales
+// 契约本身没有法人概念（阶段二只有一个默认法人），走下面的默认值分支。
 type SalesOrderEventInput struct {
 	OrderID       string
 	CustomerID    string

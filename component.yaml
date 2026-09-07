@@ -4,7 +4,7 @@ kind: Component
 metadata:
   id: erp/finance                    # ⚠️ Fork 件必须与标准件完全一致（§3.4.1）
   name: 财务管理
-  version: 1.0.0                     # 精确版本，不接受 ^ / ~ / latest
+  version: 1.0.1                     # 精确版本，不接受 ^ / ~ / latest
   description: 会计科目表、总账分录、应收/应付台账、会计期间锁、对账——事件汇枢纽
   license: Apache-2.0
   vendor: brickKit
@@ -47,7 +47,7 @@ configSchema:
 
 deployment:
   type: container
-  image: brickenterprise/erp-finance:1.0.0
+  image: brickenterprise/erp-finance:1.0.1
   port: 8087                         # 端口册 registry/ports.tsv
   extraPorts:
     - { name: grpc, port: 9097 }     # → ERP_FINANCE_GRPC_ENDPOINT（值仍以 http:// 开头）

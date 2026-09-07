@@ -78,7 +78,7 @@ func TestConsumer_销售订单事件生成应收凭证(t *testing.T) {
 	}()
 	time.Sleep(150 * time.Millisecond)
 
-	payload := fmt.Sprintf(`{"order_id":%q,"customer_id":%q,"amount":"250.00"}`, orderID, customerID)
+	payload := fmt.Sprintf(`{"order_id":%q,"customer_id":%q,"total_amount":"250.00"}`, orderID, customerID)
 	publishEvent(t, nc, "sales.order.created.v1", orderID, 1, payload)
 	nc.Flush()
 	time.Sleep(400 * time.Millisecond)

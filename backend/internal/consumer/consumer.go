@@ -48,14 +48,20 @@ func Start(ctx context.Context, db *sql.DB, role, schema string, nc *nats.Conn, 
 	}
 }
 
-// salesOrderPayload 是本组件先按设计计划 §4 的描述假定的形状——
-// erp-sales 还没建（Task 15-18），写它的事件契约时要回头对一遍
-// （见 repo.SalesOrderEventInput 的同一条注释）。
+// salesOrderPayload 字段直接照抄 erp-sales 已经真实发布的契约
+// （erp-sales Task 17，contracts/events/sales.events.json）。
+//
+// ⚠️ 这份 struct 曾经是"先按设计计划 §4 的描述假定的形状"（erp-sales
+// 那时还没建），字段名猜错了一处：这里原来写的是 amount，erp-sales 真实
+// 发布的字段是 total_amount——erp-sales 建完回来对的时候发现并改掉，
+// 这正是当时那条注释预留的"要回头对一遍"。legal_entity_id 也不存在于
+// 真实契约里（erp-sales 阶段二没有法人概念）——不需要单独处理，
+// postSalesOrderEntryTx 本来就会在 LegalEntityID 为空时退回
+// defaultLegalEntityID（阶段二只有一个默认法人）。
 type salesOrderPayload struct {
-	OrderID       string `json:"order_id"`
-	CustomerID    string `json:"customer_id"`
-	Amount        string `json:"amount"`
-	LegalEntityID string `json:"legal_entity_id"`
+	OrderID     string `json:"order_id"`
+	CustomerID  string `json:"customer_id"`
+	TotalAmount string `json:"total_amount"`
 }
 
 func salesOrderHandler(logger *slog.Logger) func(context.Context, *sql.Tx, besdk.Event) error {
@@ -69,8 +75,8 @@ func salesOrderHandler(logger *slog.Logger) func(context.Context, *sql.Tx, besdk
 		// besdk.WithTx（那是另一个独立会话，不是同一个事务）。见
 		// repo/autoentry.go 顶部注释。
 		return repo.PostSalesOrderEntryTx(ctx, tx, repo.SalesOrderEventInput{
-			OrderID: p.OrderID, CustomerID: p.CustomerID, Amount: p.Amount,
-			LegalEntityID: p.LegalEntityID, EventVersion: ev.Version,
+			OrderID: p.OrderID, CustomerID: p.CustomerID, Amount: p.TotalAmount,
+			EventVersion: ev.Version,
 		}, logger)
 	}
 }
