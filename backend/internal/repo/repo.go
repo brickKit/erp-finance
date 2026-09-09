@@ -29,6 +29,23 @@ var ErrUnbalancedEntry = errors.New("凭证借贷不平衡")
 // （如 ReverseEntry）。
 var ErrEntryNotPosted = errors.New("凭证尚未过账")
 
+// ErrForbidden：调用者对某个具体法人没有 legal_entity_access 授权
+// （阶段三 Task 6，§14.2.2 的 legal_entity 维）。⚠️ 同 erp-inventory 的
+// ErrForbidden：这个法人是真实存在的，调用者只是看不见，与 ErrNotFound
+// 语义不同，不能混用。
+var ErrForbidden = errors.New("无权访问该法人")
+
+// containsString 判断 s 是不是在 allowed 里——写路径校验"请求体里点名的
+// legal_entity_id 我到底有没有权限"共用的小工具。
+func containsString(allowed []string, s string) bool {
+	for _, v := range allowed {
+		if v == s {
+			return true
+		}
+	}
+	return false
+}
+
 type Repo struct {
 	db     *sql.DB
 	role   string

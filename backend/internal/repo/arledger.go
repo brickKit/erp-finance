@@ -42,6 +42,8 @@ type ListARLedgerInput struct {
 	CustomerID    string
 	CreatedAfter  time.Time
 	CreatedBefore time.Time
+	// AllowedLegalEntityIDs 见 period.go 的 PeriodOpInput 同名字段注释。
+	AllowedLegalEntityIDs []string
 }
 
 type ListARLedgerResult struct {
@@ -67,6 +69,8 @@ func (r *Repo) ListARLedger(ctx context.Context, in ListARLedgerInput) (*ListARL
 		query := `SELECT id, customer_id, entry_id, amount, reconciled_amount, created_at
 			FROM ar_ledger WHERE created_at >= $1 AND created_at <= $2`
 		args := []any{q.From, q.To}
+		args = append(args, in.AllowedLegalEntityIDs)
+		query += fmt.Sprintf(" AND legal_entity_id = ANY($%d::text[])", len(args))
 		if in.CustomerID != "" {
 			args = append(args, in.CustomerID)
 			query += fmt.Sprintf(" AND customer_id = $%d", len(args))

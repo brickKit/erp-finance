@@ -15,6 +15,12 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib" // §12.4：不用 lib/pq，驱动名注册为 "pgx"
 )
 
+// defaultLegalEntities 是本文件测试统一使用的授权列表——种子数据只有
+// 一个默认法人 "default"（003_seed_accounts_and_periods.up.sql），
+// 测试里"调用者能访问哪个法人"就是这一个，本组件的授权分配流程
+// （GrantLegalEntityAccess）另有 access_test.go 单独测。
+var defaultLegalEntities = []string{"default"}
+
 func testDB(t *testing.T) *sql.DB {
 	t.Helper()
 	dsn := os.Getenv("TEST_PG_DSN")
@@ -79,7 +85,7 @@ func TestClosePeriod_然后LockPeriod_然后不能反关账(t *testing.T) {
 	}
 	if status == PeriodOpen {
 		status, err = r.ClosePeriod(ctx, PeriodOpInput{
-			IdempotencyKey: uniqueID("close"), Period: period, LegalEntityID: "default"})
+			IdempotencyKey: uniqueID("close"), Period: period, LegalEntityID: "default", AllowedLegalEntityIDs: defaultLegalEntities})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -89,7 +95,7 @@ func TestClosePeriod_然后LockPeriod_然后不能反关账(t *testing.T) {
 	}
 	if status == PeriodClosed {
 		status, err = r.LockPeriod(ctx, PeriodOpInput{
-			IdempotencyKey: uniqueID("lock"), Period: period, LegalEntityID: "default"})
+			IdempotencyKey: uniqueID("lock"), Period: period, LegalEntityID: "default", AllowedLegalEntityIDs: defaultLegalEntities})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -104,7 +110,7 @@ func TestClosePeriod_然后LockPeriod_然后不能反关账(t *testing.T) {
 	// LOCKED 是终态，ReopenPeriod 应该报错，不是静默成功——这条断言无论
 	// 是不是第一次跑都成立。
 	_, err = r.ReopenPeriod(ctx, PeriodOpInput{
-		IdempotencyKey: uniqueID("reopen"), Period: period, LegalEntityID: "default"})
+		IdempotencyKey: uniqueID("reopen"), Period: period, LegalEntityID: "default", AllowedLegalEntityIDs: defaultLegalEntities})
 	if !errors.Is(err, ErrInvalidArgument) {
 		t.Fatalf("对 LOCKED 期间 Reopen 应该报错，实际：%v", err)
 	}
@@ -117,13 +123,13 @@ func TestClosePeriod_重复调用是幂等的(t *testing.T) {
 	period := "2026-02"
 
 	if _, err := r.ClosePeriod(ctx, PeriodOpInput{
-		IdempotencyKey: uniqueID("close"), Period: period, LegalEntityID: "default"}); err != nil {
+		IdempotencyKey: uniqueID("close"), Period: period, LegalEntityID: "default", AllowedLegalEntityIDs: defaultLegalEntities}); err != nil {
 		t.Fatal(err)
 	}
 	// 已经是 CLOSED，再关一次（不同 idempotency_key，模拟"没记住结果的重试"）
 	// 应该安全返回 CLOSED，不报错。
 	status, err := r.ClosePeriod(ctx, PeriodOpInput{
-		IdempotencyKey: uniqueID("close-retry"), Period: period, LegalEntityID: "default"})
+		IdempotencyKey: uniqueID("close-retry"), Period: period, LegalEntityID: "default", AllowedLegalEntityIDs: defaultLegalEntities})
 	if err != nil {
 		t.Fatalf("对已经 CLOSED 的期间重复 Close 不该报错：%v", err)
 	}
@@ -139,7 +145,7 @@ func TestPostManualEntry_借贷不平衡时拒绝且不落库(t *testing.T) {
 
 	key := uniqueID("unbalanced")
 	_, err := r.PostManualEntry(ctx, PostManualEntryInput{
-		IdempotencyKey: key, LegalEntityID: "default",
+		IdempotencyKey: key, LegalEntityID: "default", AllowedLegalEntityIDs: defaultLegalEntities,
 		Lines: []Line{
 			{AccountCode: "1122", Debit: "100"},
 			{AccountCode: "6001", Credit: "50"}, // 故意不平
@@ -168,7 +174,7 @@ func TestPostManualEntry_成功过账并生成postNo(t *testing.T) {
 	r := New(db, "erp_finance_rw", "erp_finance")
 
 	entry, err := r.PostManualEntry(ctx, PostManualEntryInput{
-		IdempotencyKey: uniqueID("manual"), LegalEntityID: "default",
+		IdempotencyKey: uniqueID("manual"), LegalEntityID: "default", AllowedLegalEntityIDs: defaultLegalEntities,
 		Lines: []Line{
 			{AccountCode: "1122", Debit: "100.00"},
 			{AccountCode: "6001", Credit: "100.00"},
@@ -199,7 +205,7 @@ func TestPostManualEntry_幂等(t *testing.T) {
 	key := uniqueID("manual-idem")
 
 	in := PostManualEntryInput{
-		IdempotencyKey: key, LegalEntityID: "default",
+		IdempotencyKey: key, LegalEntityID: "default", AllowedLegalEntityIDs: defaultLegalEntities,
 		Lines: []Line{{AccountCode: "1122", Debit: "50"}, {AccountCode: "6001", Credit: "50"}},
 	}
 	e1, err := r.PostManualEntry(ctx, in)
@@ -239,7 +245,7 @@ func TestPostEntryTx_关闭的期间顺延到下一个开放期间(t *testing.T)
 	r := New(db, "erp_finance_rw", "erp_finance")
 
 	if _, err := r.ClosePeriod(ctx, PeriodOpInput{
-		IdempotencyKey: uniqueID("close-for-rollforward"), Period: "2026-06", LegalEntityID: "default"}); err != nil {
+		IdempotencyKey: uniqueID("close-for-rollforward"), Period: "2026-06", LegalEntityID: "default", AllowedLegalEntityIDs: defaultLegalEntities}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -287,7 +293,7 @@ func TestReverseEntry_原凭证不变且冲销凭证借贷互换(t *testing.T) {
 	r := New(db, "erp_finance_rw", "erp_finance")
 
 	original, err := r.PostManualEntry(ctx, PostManualEntryInput{
-		IdempotencyKey: uniqueID("rev-orig"), LegalEntityID: "default",
+		IdempotencyKey: uniqueID("rev-orig"), LegalEntityID: "default", AllowedLegalEntityIDs: defaultLegalEntities,
 		Lines: []Line{{AccountCode: "1122", Debit: "80"}, {AccountCode: "6001", Credit: "80"}},
 	})
 	if err != nil {
@@ -296,6 +302,7 @@ func TestReverseEntry_原凭证不变且冲销凭证借贷互换(t *testing.T) {
 
 	reversal, err := r.ReverseEntry(ctx, ReverseEntryInput{
 		IdempotencyKey: uniqueID("rev"), EntryID: original.ID, Reason: "测试冲销",
+		AllowedLegalEntityIDs: defaultLegalEntities,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -305,7 +312,7 @@ func TestReverseEntry_原凭证不变且冲销凭证借贷互换(t *testing.T) {
 	}
 
 	// 原凭证一个字不动
-	stillOriginal, err := r.GetEntry(ctx, original.ID)
+	stillOriginal, err := r.GetEntry(ctx, original.ID, defaultLegalEntities)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -369,7 +376,9 @@ func TestPostSalesOrderEntry_生成应收凭证AR台账与已用额度(t *testin
 		t.Fatalf("期望已用额度 500.00，实际 %q", ce.Exposure)
 	}
 
-	arRes, err := r.ListARLedger(ctx, ListARLedgerInput{CustomerID: customerID, PageSize: 10})
+	arRes, err := r.ListARLedger(ctx, ListARLedgerInput{
+		CustomerID: customerID, PageSize: 10, AllowedLegalEntityIDs: defaultLegalEntities,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -490,7 +499,7 @@ func TestPostInventoryAdjustedEntry_生成存货凭证且金额是占位换算(t
 	if !found {
 		t.Fatal("期望找到对应的凭证")
 	}
-	entry, err := r.GetEntry(ctx, entryID)
+	entry, err := r.GetEntry(ctx, entryID, defaultLegalEntities)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -556,7 +565,7 @@ func TestPostManualEntry_并发过账postNo连续无缺口(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			entry, err := r.PostManualEntry(ctx, PostManualEntryInput{
-				IdempotencyKey: uniqueID(fmt.Sprintf("concurrent-post-%d", i)), LegalEntityID: "default",
+				IdempotencyKey: uniqueID(fmt.Sprintf("concurrent-post-%d", i)), LegalEntityID: "default", AllowedLegalEntityIDs: defaultLegalEntities,
 				Lines: []Line{{AccountCode: "1122", Debit: "1"}, {AccountCode: "6001", Credit: "1"}},
 			})
 			if err != nil {

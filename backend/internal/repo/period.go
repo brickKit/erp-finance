@@ -43,6 +43,12 @@ type PeriodOpInput struct {
 	IdempotencyKey string
 	Period         string
 	LegalEntityID  string
+	// AllowedLegalEntityIDs 是调用者当前的 legal_entity_access 授权列表
+	// （阶段三 Task 6）——service 层从 besdk.ScopeOf(ctx) 取 sub 查出来
+	// 再传进来。请求体点名的 LegalEntityID 不在这份列表里就是
+	// ErrForbidden：关/开/锁期间是强操作，写路径必须和读路径一样受
+	// legal_entity 维数据权限约束，不能只保护读接口。
+	AllowedLegalEntityIDs []string
 }
 
 // transitionPeriod 是三个期间操作共用的状态机：from 是允许的起始状态
@@ -53,6 +59,9 @@ type PeriodOpInput struct {
 func transitionPeriod(ctx context.Context, r *Repo, in PeriodOpInput, command string, from, to string) (string, error) {
 	if in.IdempotencyKey == "" {
 		return "", fmt.Errorf("%w: idempotency_key 不能为空", ErrInvalidArgument)
+	}
+	if !containsString(in.AllowedLegalEntityIDs, in.LegalEntityID) {
+		return "", ErrForbidden
 	}
 	var status string
 	err := besdk.WithTx(ctx, r.db, r.role, r.schema, func(tx *sql.Tx) error {

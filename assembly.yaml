@@ -37,8 +37,9 @@ data_scopes:
       tables: [finance_journal_entries, finance_journal_entry_lines, ar_ledger, ap_ledger] }
 
 permissions:
-  - { key: erp.finance.view,  title: 查看财务数据,   type: page   }
-  - { key: erp.finance.post,  title: 手工过账/冲销,  type: action }
-  - { key: erp.finance.close, title: 关账/反关账/锁定期间, type: action }
+  - { key: erp.finance.view,           title: 查看财务数据,         type: page   }
+  - { key: erp.finance.post,           title: 手工过账/冲销,        type: action }
+  - { key: erp.finance.close,          title: 关账/反关账/锁定期间, type: action }
+  - { key: erp.finance.manage_access,  title: 分配法人访问权限,     type: action }
 
 shell: go-core                       # 合并部署时进外壳一（§13.2）

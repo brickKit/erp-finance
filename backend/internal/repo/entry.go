@@ -207,6 +207,8 @@ type PostManualEntryInput struct {
 	LegalEntityID  string
 	Lines          []Line
 	Memo           string
+	// AllowedLegalEntityIDs 见 period.go 的 PeriodOpInput 同名字段注释。
+	AllowedLegalEntityIDs []string
 }
 
 // PostManualEntry：自动凭证走事件消费，这里只有人工补录（设计计划
@@ -217,6 +219,9 @@ func (r *Repo) PostManualEntry(ctx context.Context, in PostManualEntryInput) (*E
 	}
 	if in.LegalEntityID == "" {
 		return nil, fmt.Errorf("%w: legal_entity_id 不能为空", ErrInvalidArgument)
+	}
+	if !containsString(in.AllowedLegalEntityIDs, in.LegalEntityID) {
+		return nil, ErrForbidden
 	}
 	var entry *Entry
 	err := besdk.WithTx(ctx, r.db, r.role, r.schema, func(tx *sql.Tx) error {
@@ -252,6 +257,11 @@ type ReverseEntryInput struct {
 	IdempotencyKey string
 	EntryID        string
 	Reason         string
+	// AllowedLegalEntityIDs 见 period.go 的 PeriodOpInput 同名字段注释。
+	// ⚠️ 与 PostManualEntry 不同：这里没有调用方直接点名的 LegalEntityID
+	// ——要冲销哪个法人的账，是从"被冲销的那张原凭证"上查出来的，校验
+	// 时机必须在拿到 original 之后（见下）。
+	AllowedLegalEntityIDs []string
 }
 
 // ReverseEntry：红字冲销，不是删除（设计计划 §2.1）——原凭证一个字不动，
@@ -282,6 +292,9 @@ func (r *Repo) ReverseEntry(ctx context.Context, in ReverseEntryInput) (*Entry, 
 		original, err := getEntryTx(ctx, tx, in.EntryID)
 		if err != nil {
 			return err
+		}
+		if !containsString(in.AllowedLegalEntityIDs, original.LegalEntityID) {
+			return ErrForbidden
 		}
 		if original.Status != EntryPosted {
 			return fmt.Errorf("%w: entry_id=%s", ErrEntryNotPosted, in.EntryID)
@@ -355,7 +368,11 @@ func getEntryTx(ctx context.Context, tx *sql.Tx, id string) (*Entry, error) {
 	return &e, nil
 }
 
-func (r *Repo) GetEntry(ctx context.Context, id string) (*Entry, error) {
+// GetEntry：allowedLegalEntityIDs 是调用者当前的 legal_entity_access
+// 授权列表——查到的凭证不在这份列表里就是 ErrForbidden，不是
+// ErrNotFound（同 erp-inventory 的 ErrForbidden 判据：凭证真实存在，
+// 调用者只是看不见）。
+func (r *Repo) GetEntry(ctx context.Context, id string, allowedLegalEntityIDs []string) (*Entry, error) {
 	var e *Entry
 	err := besdk.WithTx(ctx, r.db, r.role, r.schema, func(tx *sql.Tx) error {
 		var err error
@@ -364,6 +381,9 @@ func (r *Repo) GetEntry(ctx context.Context, id string) (*Entry, error) {
 	})
 	if err != nil {
 		return nil, err
+	}
+	if !containsString(allowedLegalEntityIDs, e.LegalEntityID) {
+		return nil, ErrForbidden
 	}
 	return e, nil
 }
@@ -376,6 +396,10 @@ type ListInput struct {
 	StatusFilter  string
 	CreatedAfter  time.Time
 	CreatedBefore time.Time
+	// AllowedLegalEntityIDs 见 period.go 的 PeriodOpInput 同名字段注释
+	// ——**必须**下推进 SQL 的 WHERE 子句，不能查出结果后在 Go 里再
+	// 过滤（决策 53、§14.2.4 的既有判据）。
+	AllowedLegalEntityIDs []string
 }
 
 type ListResult struct {
@@ -404,6 +428,11 @@ func (r *Repo) ListEntries(ctx context.Context, in ListInput) (*ListResult, erro
 	err := besdk.WithTx(ctx, r.db, r.role, r.schema, func(tx *sql.Tx) error {
 		query := `SELECT id FROM finance_journal_entries WHERE created_at >= $1 AND created_at <= $2`
 		args := []any{q.From, q.To}
+		// ⚠️ legal_entity_access 过滤永远加——空/nil 列表让 `= ANY(...)`
+		// 天然匹配不到任何行，这是"没有分配=谁都看不见"的正确 fail-closed
+		// 结果（同 erp-inventory 的 ListMovements 既有判据）。
+		args = append(args, in.AllowedLegalEntityIDs)
+		query += fmt.Sprintf(" AND legal_entity_id = ANY($%d::text[])", len(args))
 		if in.Period != "" {
 			args = append(args, in.Period)
 			query += fmt.Sprintf(" AND period = $%d", len(args))

@@ -16,20 +16,30 @@ import (
 	"github.com/brickKit/erp-finance/backend/internal/service"
 )
 
-// RegisterRoutes 挂载业务路由。⚠️ 全部标 besdk.Public 是阶段二的刻意
-// 状态（同 erp-inventory）：阶段三 infra-authz 上线后要把这几条改成
-// assembly.yaml 里对应的真实权限键（erp.finance.view/post/close）。
+// RegisterRoutes 挂载业务路由。
+//
+// 阶段三 Task 6：权限键从阶段二的 besdk.Public 换成 assembly.yaml 里
+// 声明的真实键——`erp.finance.close` 的 title 是"关账/反关账/锁定期间"，
+// 覆盖 close/reopen/lock 三个操作；`erp.finance.post` 的 title 是
+// "手工过账/冲销"，覆盖 postManualEntry/reverseEntry 两个操作。
+// `legal_entity` 维数据范围（谁能看/改哪个法人的账）另见 access.go——
+// 不经 besdk.ScopeOf（那是纯读 JWT 的 org/owner 两维），本组件自己查
+// legal_entity_access 表，写路径（period-ops/postManualEntry）额外校验
+// 请求体里点名的 legal_entity_id 是不是在授权范围内。
 func RegisterRoutes(eng *gin.Engine, svc *service.Service) {
 	g := eng.Group("/erp/finance")
-	besdk.POST(g, "/periods/:period/close", besdk.Public, periodOpHandler(svc.ClosePeriod))
-	besdk.POST(g, "/periods/:period/reopen", besdk.Public, periodOpHandler(svc.ReopenPeriod))
-	besdk.POST(g, "/periods/:period/lock", besdk.Public, periodOpHandler(svc.LockPeriod))
-	besdk.GET(g, "/credit-exposure/:customer_id", besdk.Public, getCreditExposureHandler(svc))
-	besdk.GET(g, "/entries", besdk.Public, listEntriesHandler(svc))
-	besdk.POST(g, "/entries", besdk.Public, postManualEntryHandler(svc))
-	besdk.GET(g, "/entries/:id", besdk.Public, getEntryHandler(svc))
-	besdk.POST(g, "/entries/:id/reverse", besdk.Public, reverseEntryHandler(svc))
-	besdk.GET(g, "/ar-ledger", besdk.Public, listARLedgerHandler(svc))
+	besdk.POST(g, "/periods/:period/close", "erp.finance.close", periodOpHandler(svc.ClosePeriod))
+	besdk.POST(g, "/periods/:period/reopen", "erp.finance.close", periodOpHandler(svc.ReopenPeriod))
+	besdk.POST(g, "/periods/:period/lock", "erp.finance.close", periodOpHandler(svc.LockPeriod))
+	besdk.GET(g, "/credit-exposure/:customer_id", "erp.finance.view", getCreditExposureHandler(svc))
+	besdk.GET(g, "/entries", "erp.finance.view", listEntriesHandler(svc))
+	besdk.POST(g, "/entries", "erp.finance.post", postManualEntryHandler(svc))
+	besdk.GET(g, "/entries/:id", "erp.finance.view", getEntryHandler(svc))
+	besdk.POST(g, "/entries/:id/reverse", "erp.finance.post", reverseEntryHandler(svc))
+	besdk.GET(g, "/ar-ledger", "erp.finance.view", listARLedgerHandler(svc))
+	besdk.GET(g, "/legal-entity-access/:sub", "erp.finance.manage_access", listLegalEntityAccessHandler(svc))
+	besdk.POST(g, "/legal-entity-access/:sub", "erp.finance.manage_access", grantLegalEntityAccessHandler(svc))
+	besdk.DELETE(g, "/legal-entity-access/:sub/:legal_entity_id", "erp.finance.manage_access", revokeLegalEntityAccessHandler(svc))
 }
 
 type periodOpRequest struct {
@@ -198,5 +208,48 @@ func listARLedgerHandler(svc *service.Service) gin.HandlerFunc {
 			})
 		}
 		c.JSON(http.StatusOK, gin.H{"entries": dtos, "next_cursor": out.NextCursor})
+	}
+}
+
+// ── legal_entity_access 管理（阶段三 Task 6，erp.finance.manage_access）──
+
+func listLegalEntityAccessHandler(svc *service.Service) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ids, err := svc.ListLegalEntityAccess(c.Request.Context(), c.Param("sub"))
+		if err != nil {
+			_ = c.Error(service.ToStatus(err))
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"legal_entity_ids": ids})
+	}
+}
+
+type grantLegalEntityAccessRequest struct {
+	LegalEntityID string `json:"legal_entity_id" binding:"required"`
+}
+
+func grantLegalEntityAccessHandler(svc *service.Service) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req grantLegalEntityAccessRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		if err := svc.GrantLegalEntityAccess(c.Request.Context(), c.Param("sub"), req.LegalEntityID); err != nil {
+			_ = c.Error(service.ToStatus(err))
+			return
+		}
+		c.Status(http.StatusOK)
+	}
+}
+
+func revokeLegalEntityAccessHandler(svc *service.Service) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		err := svc.RevokeLegalEntityAccess(c.Request.Context(), c.Param("sub"), c.Param("legal_entity_id"))
+		if err != nil {
+			_ = c.Error(service.ToStatus(err))
+			return
+		}
+		c.Status(http.StatusOK)
 	}
 }

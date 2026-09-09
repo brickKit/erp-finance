@@ -94,7 +94,9 @@ func TestConsumer_销售订单事件生成应收凭证(t *testing.T) {
 		t.Fatalf("期望已用额度 250.00，实际 %q", ce.Exposure)
 	}
 
-	arRes, err := r.ListARLedger(context.Background(), repo.ListARLedgerInput{CustomerID: customerID, PageSize: 10})
+	arRes, err := r.ListARLedger(context.Background(), repo.ListARLedgerInput{
+		CustomerID: customerID, PageSize: 10, AllowedLegalEntityIDs: []string{"default"},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
