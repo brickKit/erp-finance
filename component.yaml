@@ -4,7 +4,9 @@ kind: Component
 metadata:
   id: erp/finance                    # ⚠️ Fork 件必须与标准件完全一致（§3.4.1）
   name: 财务管理
-  version: 1.0.4                     # 精确版本，不接受 ^ / ~ / latest
+  version: 1.0.5                     # 精确版本，不接受 ^ / ~ / latest
+                                      # v1.0.5：docs/手册.md 的 TEST_PG_DSN 示例改指向
+                                      # brickkit_test_db，纯文档，无行为/契约变更
                                       # v1.0.4：补 ListEntries 的真实跨法人排除测试
                                       # （TestListEntries_看不到别的法人的凭证）——
                                       # 过程中发现一个真实但当前不可触发的设计缺口
@@ -62,7 +64,7 @@ configSchema:
 
 deployment:
   type: container
-  image: brickenterprise/erp-finance:1.0.4
+  image: brickenterprise/erp-finance:1.0.5
   port: 8087                         # 端口册 registry/ports.tsv
   extraPorts:
     - { name: grpc, port: 9097 }     # → ERP_FINANCE_GRPC_ENDPOINT（值仍以 http:// 开头）
