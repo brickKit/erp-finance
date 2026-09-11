@@ -4,7 +4,15 @@ kind: Component
 metadata:
   id: erp/finance                    # ⚠️ Fork 件必须与标准件完全一致（§3.4.1）
   name: 财务管理
-  version: 1.0.3                     # 精确版本，不接受 ^ / ~ / latest
+  version: 1.0.4                     # 精确版本，不接受 ^ / ~ / latest
+                                      # v1.0.4：补 ListEntries 的真实跨法人排除测试
+                                      # （TestListEntries_看不到别的法人的凭证）——
+                                      # 过程中发现一个真实但当前不可触发的设计缺口
+                                      # （post_no 不含 legal_entity_id 但按
+                                      # (period,legal_entity_id) 独立计数，两个法人
+                                      # 同期间各自首次过账会撞同一个 post_no，记入
+                                      # 踩坑记录 C17，未改产品代码）。纯补测试，无
+                                      # 行为/契约变更。
                                       # v1.0.2：纯 Makefile 门禁加固（check-version
                                       # 新增 deployment.image 与 version 一致性判据，
                                       # 阶段三 Task 4 发现其余四个组件的这条真的分叉过）
@@ -54,7 +62,7 @@ configSchema:
 
 deployment:
   type: container
-  image: brickenterprise/erp-finance:1.0.3
+  image: brickenterprise/erp-finance:1.0.4
   port: 8087                         # 端口册 registry/ports.tsv
   extraPorts:
     - { name: grpc, port: 9097 }     # → ERP_FINANCE_GRPC_ENDPOINT（值仍以 http:// 开头）
