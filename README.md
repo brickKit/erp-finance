@@ -18,13 +18,53 @@
 就能单独跑起来——它不对 IAM 建依赖边，JWT 走本地验签（决策 87）。
 
 ## 怎么起来
-（Task 14 实现完成后补：装配路径 + 单独跑的完整命令）
+
+```bash
+# 装配仓库根目录
+make up
+cd components/erp/finance
+go build -o build/migrate ./backend/cmd/migrate
+PG_SCHEMA=erp_finance DATABASE_HOST=localhost DATABASE_PORT=5432 \
+  DATABASE_USER=postgres DATABASE_PASSWORD=<.env 里的 POSTGRES_PASSWORD> DATABASE_NAME=brickkit_db \
+  ./build/migrate up
+go run ./backend/cmd/server     # 单独跑：besdk.RunStandalone 读 component.yaml 的端口
+```
+
+或者用平台：`brickkit up`（装配仓库根目录，`components/erp/finance` 登记为 submodule 且在 `brickkit.yaml` 里之后）。也可以直接 `make seed`/`make db-reset`——自成一体的演示数据（人工凭证+期间三态生命周期），不依赖任何其他组件先起来。
 
 ## 怎么用
-（Task 14 后补：一条 curl + 一条 grpcurl）
+
+```bash
+# 手工凭证过账（REST，人类操作；自动凭证走事件消费，不走这里）
+curl -X POST -H 'Authorization: Bearer <应用 token>' -H 'Content-Type: application/json' \
+  -d '{
+    "idempotency_key": "manual-entry-demo-1",
+    "legal_entity_id": "1",
+    "lines": [
+      {"account_id": "1001", "debit": "1000.00", "credit": "0.00", "memo": "示例借方"},
+      {"account_id": "2001", "debit": "0.00", "credit": "1000.00", "memo": "示例贷方"}
+    ],
+    "memo": "示例手工凭证"
+  }' \
+  http://localhost:8087/erp/finance/entries
+
+# 查已用信用额度
+curl -H 'Authorization: Bearer <应用 token>' \
+  'http://localhost:8087/erp/finance/credit-exposure/1'
+
+# 关账（可逆；LockPeriod 才是不可逆终态）
+curl -X POST -H 'Authorization: Bearer <应用 token>' \
+  http://localhost:8087/erp/finance/periods/2026-09/close
+```
 
 ## 配置项
-（Task 12/13 写完 component.yaml 后补，平台注入的保留变量单列一段）
+
+| 配置键 | 默认值 | 说明 |
+|---|---|---|
+| `pgSchema` | `erp_finance` | 本组件的 PG schema |
+| `otelBaseUrl` | `""` | 空 = Blackhole Exporter，零成本 |
+| `iamJwksUrl` | `""` | JWT 本地验签的公钥来源，指向 `infra-iam-casdoor` |
+| `authzBundleUrl` | `""` | 权限判定的 bundle 轮询地址，指向 `infra-authz` |
 
 ## 参考实现
 | 项目 | 看的模块 | 借鉴了什么 | 许可证（已复核） | 用法 |

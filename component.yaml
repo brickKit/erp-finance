@@ -4,7 +4,12 @@ kind: Component
 metadata:
   id: erp/finance                    # ⚠️ Fork 件必须与标准件完全一致（§3.4.1）
   name: 财务管理
-  version: 1.0.6                     # 精确版本，不接受 ^ / ~ / latest
+  version: 1.0.7                     # 精确版本，不接受 ^ / ~ / latest
+                                      # v1.0.7：补齐 README.md 的"怎么起来"/"怎么用"/
+                                      # "配置项"三节——建仓库时留的占位符一直没人回来
+                                      # 填，`make docs-check` 的占位符检测正则同时修正
+                                      # （原来只查 TBD/TODO/待补，没覆盖实际用的"后补"
+                                      # 措辞）。纯文档，无行为/契约变更。
                                       # v1.0.6：新增 make seed（从零设计，AGENTS.md 原文点名
                                       # "几乎没有专属演示数据"）——5 张 PostManualEntry 人工
                                       # 凭证（覆盖 5 个科目 + 单行/四行多行 + 待冲销样例真做
@@ -81,7 +86,7 @@ configSchema:
 
 deployment:
   type: container
-  image: brickenterprise/erp-finance:1.0.6
+  image: brickenterprise/erp-finance:1.0.7
   port: 8087                         # 端口册 registry/ports.tsv
   extraPorts:
     - { name: grpc, port: 9097 }     # → ERP_FINANCE_GRPC_ENDPOINT（值仍以 http:// 开头）
