@@ -36,9 +36,9 @@ func seedPeriodForLegalEntity(t *testing.T, ctx context.Context, r *Repo, legalE
 	// 这条测试不建 entry_lines（见 seedEntryForLegalEntity），post_no
 	// 冲突的坑也就不会触发。
 	_, err := r.db.ExecContext(ctx, `
-		INSERT INTO accounting_periods (fiscal_year_id, period, legal_entity_id, start_date, end_date)
+		INSERT INTO erp_finance.accounting_periods (fiscal_year_id, period, legal_entity_id, start_date, end_date)
 		SELECT fiscal_year_id, period, $1, start_date, end_date
-		FROM accounting_periods WHERE legal_entity_id = 'default' AND period = '2026-09'`,
+		FROM erp_finance.accounting_periods WHERE legal_entity_id = 'default' AND period = '2026-09'`,
 		legalEntityID)
 	if err != nil {
 		t.Fatalf("建测试期间失败：%v", err)
@@ -52,7 +52,7 @@ func seedEntryForLegalEntity(t *testing.T, ctx context.Context, r *Repo, legalEn
 	t.Helper()
 	var id int64
 	err := r.db.QueryRowContext(ctx, `
-		INSERT INTO finance_journal_entries (entry_no, post_no, period, legal_entity_id, status)
+		INSERT INTO erp_finance.finance_journal_entries (entry_no, post_no, period, legal_entity_id, status)
 		VALUES ($1, $2, '2026-09', $3, 'POSTED') RETURNING id`,
 		uniqueID("entry-no"), uniqueID("post-no"), legalEntityID).Scan(&id)
 	if err != nil {

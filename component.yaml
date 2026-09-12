@@ -4,7 +4,25 @@ kind: Component
 metadata:
   id: erp/finance                    # ⚠️ Fork 件必须与标准件完全一致（§3.4.1）
   name: 财务管理
-  version: 1.0.7                     # 精确版本，不接受 ^ / ~ / latest
+  version: 1.0.8                     # 精确版本，不接受 ^ / ~ / latest
+                                      # v1.0.8：补 TestProperty_借贷不平衡的分录被拒绝且
+                                      # 不落库/TestProperty_PostManualEntry并发同key仅
+                                      # 执行一次——04-testing-standard.md §3.2 对"核心
+                                      # 交易类组件"的强制要求（L2 必须用属性测试，例子
+                                      # 测试不够），全项目系统排查测试完整性时发现三个
+                                      # 核心交易类组件（本组件/erp-inventory/erp-sales）
+                                      # 从建组件起就没写过一个属性测试，此次补齐。用
+                                      # rapid 随机拼借贷分录行攻击"借贷必须相等"这条
+                                      # 复式记账唯一不变式；并补上此前从没测过的"并发
+                                      # 同 key 只执行一次"。顺带修了
+                                      # TestListEntries_看不到别的法人的凭证 这条既有
+                                      # 测试自己的 bug：夹具函数里两条裸 SQL
+                                      # （seedPeriodForLegalEntity/seedEntryForLegalEntity）
+                                      # 缺 erp_finance schema 前缀，用标准文档里例的
+                                      # TEST_PG_DSN 直连会报"relation does not exist"——
+                                      # 这是本次做完整测试排查时才发现的既有红，与本次
+                                      # 属性测试新增本身无关。纯补测试+修测试夹具自身
+                                      # 的 bug，无行为/契约变更。
                                       # v1.0.7：补齐 README.md 的"怎么起来"/"怎么用"/
                                       # "配置项"三节——建仓库时留的占位符一直没人回来
                                       # 填，`make docs-check` 的占位符检测正则同时修正
@@ -86,7 +104,7 @@ configSchema:
 
 deployment:
   type: container
-  image: brickenterprise/erp-finance:1.0.7
+  image: brickenterprise/erp-finance:1.0.8
   port: 8087                         # 端口册 registry/ports.tsv
   extraPorts:
     - { name: grpc, port: 9097 }     # → ERP_FINANCE_GRPC_ENDPOINT（值仍以 http:// 开头）
