@@ -1,3 +1,10 @@
-DELETE FROM accounting_periods WHERE fiscal_year_id IN (SELECT id FROM fiscal_years WHERE name = 'FY2026');
-DELETE FROM fiscal_years WHERE name = 'FY2026';
-DELETE FROM accounts WHERE code IN ('1122', '2202', '1405', '6001', '6401');
+-- 有意留空。down 迁移按版本号倒序执行（004→003→002→001）：这里如果真
+-- 的 DELETE accounting_periods/accounts，执行时 001 的 down 还没跑到，
+-- finance_journal_entries（FK 到 accounting_periods）、
+-- finance_journal_entry_lines（FK 到 accounts）只要还有任何一行（种子
+-- 数据或真实业务数据）就会撞外键——同 erp-inventory 的
+-- 003_seed_warehouses.down.sql 踩过的坑（实测踩坑记录 C21/C23）。
+-- 001_create_finance.down.sql 本来就会按正确顺序 DROP TABLE
+-- finance_journal_entries/finance_journal_entry_lines/accounting_periods/
+-- accounts/fiscal_years，连带把这里种的数据一起删掉，不需要在这里重复
+-- 删一次。

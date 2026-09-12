@@ -2,7 +2,7 @@ IMAGE   := brickenterprise/erp-finance
 VERSION := $(shell grep -E '^\s+version:' component.yaml | head -1 | awk '{print $$2}')
 
 .DEFAULT_GOAL := help
-.PHONY: help all check-version test image migrate-idempotent dag-check contract-check import-scan module-check docs-check smoke
+.PHONY: help all check-version test image migrate-idempotent dag-check contract-check import-scan module-check docs-check smoke seed db-reset
 
 help:  ## 列出所有目标
 	@awk 'BEGIN{FS=":.*##"; printf "\n用法: make <目标>\n\n"} \
@@ -96,3 +96,21 @@ smoke:  ## 原则一：只装这一个组件就能起来（§1.5、§3.11 第 8 
 	@# brickkit 不向上找 brickkit.yaml，必须从装配仓库根目录跑——本组件
 	@# 固定挂在 components/erp/finance 下，根目录固定是 ../../..
 	@(cd ../../.. && brickkit up --dry-run >/dev/null) && echo "✓ smoke（完整版见 make tier0）"
+
+##@ 本地开发数据（总纲 SOP-W-7，仅本地/演示用，不进部署/CI）
+seed:  ## 灌本组件自己的示例凭证/期间数据（幂等，可重复跑）。链式建好身份/授权（PostManualEntry/期间操作要真实 JWT + legal_entity_access），单独跑就能拿到完整数据
+	@$(MAKE) -C ../../infra/iam-casdoor seed
+	@$(MAKE) -C ../../infra/authz seed
+	@bash scripts/seed.sh
+
+db-reset:  ## 完整重置本组件数据库（migrate down 再 up）——不是 seed-clean
+	@# 本组件没有 seed-clean：entry_no_seq/post_no 计数器"只增不回退"
+	@# （总纲 SOP-W-7"delete 不是 reset"判据），更关键的是 LockPeriod 是
+	@# 契约里唯一的终态——一旦锁过某个期间，没有任何 rpc 能把它转回去，
+	@# 逐行 DELETE 从物理上就不可能干净复原。想清空种子数据只能整库重置。
+	@# ⚠️ 会清空本组件全部数据（不止 seed 灌的），不是精确撤销；重置期间
+	@# 建议先 brickkit down 掉本组件容器，避免它连接池里缓存的语句撞上
+	@# 被删重建的表。需要 DATABASE_HOST/PORT/USER/PASSWORD/NAME + PG_SCHEMA。
+	@go build -o /tmp/erp-finance-migrate-probe ./backend/cmd/migrate
+	@/tmp/erp-finance-migrate-probe down
+	@/tmp/erp-finance-migrate-probe up
