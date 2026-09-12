@@ -38,6 +38,27 @@ func natsURLForTest(t *testing.T) string {
 	return nats.DefaultURL
 }
 
+// testSubject 给消费者测试造一个测试私有的 subject，不直接用生产真实
+// subject。
+//
+// ⚠️ 实测踩坑（docs/dev/field-tested-pitfalls-log.md 类别 E 的 E2）：这几条
+// 测试原来直接订阅/发布到真实 subject（如 "sales.order.created.v1"），
+// 而同一台机器上 `brickkit up` 真实跑着的 erp-finance 容器订阅的是
+// **同一个** subject——NATS 核心发布订阅对同一 subject 的多个订阅者是
+// 广播，两边都会收到测试发布的消息，谁先把 event_inbox 那一行 INSERT
+// 成功谁就真正执行 handler，断言读到的可能是真实容器的产出，不是本地
+// 被测代码的产出。
+//
+// 换一个测试私有的 subject 就能让真实容器完全收不到——它们只订阅生产
+// subject 字面量，不会去猜一个带随机后缀的名字。这个换法是安全的：
+// besdk.Consume 的 fn 只用 ev.Subject 拼错误信息，不拿它做任何业务判断，
+// 换成任意字符串不影响被测逻辑本身。这条规避法只适用于"测试直接构造/
+// 发布事件"的消费者测试——验证"真的发到了生产 subject 上"这件事本身的
+// 测试必须用真实 subject，不适用这个换法（本文件没有这类测试）。
+func testSubject(base string) string {
+	return fmt.Sprintf("test.%s.%d", base, time.Now().UnixNano())
+}
+
 // publishEvent 的 aggregateID 必须是每次调用都不同的值——besdk.Consume
 // 的 event_inbox 按 (subject, aggregate_id, version) 做单调去重，且这张
 // 表是持久化的（不会在两次 go test 之间清空）。之前踩过这个坑：所有
@@ -68,18 +89,19 @@ func TestConsumer_销售订单事件生成应收凭证(t *testing.T) {
 
 	orderID := fmt.Sprintf("consumer-order-%d", time.Now().UnixNano())
 	customerID := fmt.Sprintf("consumer-cust-%d", time.Now().UnixNano())
+	subj := testSubject("sales.order.created.v1")
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	done := make(chan struct{})
 	go func() {
-		_ = besdk.Consume(ctx, nc, db, "erp_finance_rw", "erp_finance", "sales.order.created.v1",
+		_ = besdk.Consume(ctx, nc, db, "erp_finance_rw", "erp_finance", subj,
 			salesOrderHandler(slog.Default()))
 		close(done)
 	}()
 	time.Sleep(150 * time.Millisecond)
 
 	payload := fmt.Sprintf(`{"order_id":%q,"customer_id":%q,"total_amount":"250.00"}`, orderID, customerID)
-	publishEvent(t, nc, "sales.order.created.v1", orderID, 1, payload)
+	publishEvent(t, nc, subj, orderID, 1, payload)
 	nc.Flush()
 	time.Sleep(400 * time.Millisecond)
 	cancel()
@@ -116,18 +138,19 @@ func TestConsumer_库存调整事件生成存货凭证(t *testing.T) {
 	defer nc.Close()
 
 	movementID := fmt.Sprintf("consumer-movement-%d", time.Now().UnixNano())
+	subj := testSubject("erp.inventory.adjusted.v1")
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	done := make(chan struct{})
 	go func() {
-		_ = besdk.Consume(ctx, nc, db, "erp_finance_rw", "erp_finance", "erp.inventory.adjusted.v1",
+		_ = besdk.Consume(ctx, nc, db, "erp_finance_rw", "erp_finance", subj,
 			inventoryAdjustedHandler(slog.Default()))
 		close(done)
 	}()
 	time.Sleep(150 * time.Millisecond)
 
 	payload := fmt.Sprintf(`{"product_id":"P-1","warehouse_id":"1","qty_delta":"5","movement_id":%q,"reason":"RECEIVE"}`, movementID)
-	publishEvent(t, nc, "erp.inventory.adjusted.v1", movementID, 1, payload)
+	publishEvent(t, nc, subj, movementID, 1, payload)
 	nc.Flush()
 	time.Sleep(400 * time.Millisecond)
 	cancel()
@@ -156,18 +179,19 @@ func TestConsumer_客户事件维护信用额度摘要副本(t *testing.T) {
 	defer nc.Close()
 
 	customerID := fmt.Sprintf("consumer-snapshot-%d", time.Now().UnixNano())
+	subj := testSubject("mdm.customer.created.v1")
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	done := make(chan struct{})
 	go func() {
-		_ = besdk.Consume(ctx, nc, db, "erp_finance_rw", "erp_finance", "mdm.customer.created.v1",
+		_ = besdk.Consume(ctx, nc, db, "erp_finance_rw", "erp_finance", subj,
 			customerSnapshotHandler())
 		close(done)
 	}()
 	time.Sleep(150 * time.Millisecond)
 
 	payload := fmt.Sprintf(`{"id":%q,"credit_limit":"8000.00"}`, customerID)
-	publishEvent(t, nc, "mdm.customer.created.v1", customerID, 1, payload)
+	publishEvent(t, nc, subj, customerID, 1, payload)
 	nc.Flush()
 	time.Sleep(400 * time.Millisecond)
 	cancel()
