@@ -4,6 +4,7 @@ go 1.25.0
 
 require (
 	github.com/brickKit/be-sdk-go v0.2.1
+	github.com/brickKit/erp-finance/gen/erp/finance v0.0.0
 	github.com/gin-gonic/gin v1.12.0
 	github.com/golang-migrate/migrate/v4 v4.19.1
 	github.com/jackc/pgx/v5 v5.10.0
@@ -12,6 +13,17 @@ require (
 	google.golang.org/protobuf v1.36.12
 	pgregory.net/rapid v1.3.0
 )
+
+// gen/erp/finance 是本仓库自己嵌套的 go module（不是外部依赖）——独立成
+// module 是为了让外壳（shells/go）能在合并部署时用它自己的 replace 把
+// erp-sales vendor 的同一份契约镜像重定向到这里，避免两份逐字复制的生成代码
+// 在同一个 protobuf 全局注册表里注册同一个文件/类型全名而 panic（阶段四调研
+// 记录 04 §13 有完整推演）。本仓库自己 standalone 构建时用这条本地 replace，
+// 不受影响；只有外壳自己的 go.mod 会把 erp-sales 那一份重定向到这里。
+// ⚠️ module 边界特意切在 gen/erp/finance（不是 gen/erp/finance/v1）：Go 模块路径
+// 禁止以字面量 `/v1`（或 `/v0`）结尾（那会被当成语义化导入版本后缀，只有 v2+
+// 合法），module 只能落在上一级目录，包本身的导入路径（含 /v1）不受影响。
+replace github.com/brickKit/erp-finance/gen/erp/finance => ./gen/erp/finance
 
 require (
 	github.com/MicahParks/jwkset v0.11.3 // indirect
