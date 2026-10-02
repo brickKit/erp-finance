@@ -55,7 +55,7 @@
 
 ## 契约索引
 
-- `contracts/erp/finance/v1/finance.proto` — gRPC `erp.finance.v1.FinanceService`。给别的组件用的：`CheckPeriodOpen`（咨询性的：权威判定在过账事务内部）、`GetCreditExposure`、`BatchGetCreditExposure`（一次取多个客户；查不到的客户算 0）。面向用户的 `ClosePeriod`、`ReopenPeriod`、`LockPeriod`、`PostManualEntry`、`ReverseEntry`、`GetEntry`、`ListEntries`、`ListARLedger` 要靠调用者身份套用 `legal_entity_access`，gRPC 不带用户身份：经 gRPC 调它们回 `INTERNAL`，请用 REST。Go 包是独立模块 `github.com/brickKit/erp-finance/gen/erp/finance`。
+- `contracts/erp/finance/v1/finance.proto` — gRPC `erp.finance.v1.FinanceService`。给别的组件用的：`CheckPeriodOpen`（咨询性的：权威判定在过账事务内部）、`GetCreditExposure`、`BatchGetCreditExposure`（一次取多个客户；查不到的客户算 0）。面向用户的 `ClosePeriod`、`ReopenPeriod`、`LockPeriod`、`PostManualEntry`、`ReverseEntry`、`GetEntry`、`ListEntries`、`ListARLedger` 要靠调用者身份套用 `legal_entity_access`，gRPC 不带用户身份：经 gRPC 调它们回 `UNAUTHENTICATED`，请用 REST。Go 包是独立模块 `github.com/brickKit/erp-finance/gen/erp/finance`。
 - `contracts/finance.openapi.yaml` — REST，前缀 `/erp/finance`，每条路由都带权限键，并按调用者的法人授权过滤：
   - `erp.finance.view`：`GET /entries`（`period`、`status_filter`、`source_doc_id`、`source_doc_type`、`created_after` / `created_before`（默认最近 90 天）、`cursor`、`page_size`）、`GET /entries/{id}`、`GET /ar-ledger`（每行带 `customer_name`、`outstanding` = 金额 − 已核销、`due_date`；`customer_id`、时间窗口、游标）、`GET /ar-ledger/summary`（`total_receivable`、`total_reconciled`、`outstanding`，以及未核销余额按逾期天数的账龄分桶：`d0_30`（含未到期）、`d31_60`、`d61_90`、`d90_plus`；可选 `customer_id`；不套时间窗口）、`GET /credit-exposure/{customer_id}`。
   - `erp.finance.post`：`POST /entries`（手工凭证，按 `idempotency_key` 幂等；金额是非负、最多两位小数的十进制字符串，借贷必须精确相等）、`POST /entries/{id}/reverse`（幂等；一张凭证只能冲销一次）。

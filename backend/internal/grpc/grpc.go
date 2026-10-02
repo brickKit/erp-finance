@@ -5,6 +5,9 @@ package grpc
 import (
 	"context"
 
+	besdk "github.com/brickKit/be-sdk-go"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	financev1 "github.com/brickKit/erp-finance/gen/erp/finance/v1"
@@ -20,6 +23,24 @@ type server struct {
 
 func New(svc *service.Service) financev1.FinanceServiceServer {
 	return &server{svc: svc}
+}
+
+// errNoUserIdentity：面向用户的 rpc 要套用调用者的 legal_entity_access，gRPC 不带用户
+// 身份（SDK 的 gRPC 端口不验 JWT）。这是调用方的错，回 UNAUTHENTICATED，不进 service：
+// 那里的 besdk.ScopeOf 取不到 Claims 会 panic，被 recovery 变成 INTERNAL 并打一行 ERROR。
+var errNoUserIdentity = status.Error(codes.Unauthenticated,
+	"gRPC 不透传用户身份，这个操作请用 REST /erp/finance/…")
+
+// requireUser 在 ctx 里没有验过签的 Claims 时返回 errNoUserIdentity。SDK 没有不 panic 的
+// Claims 读取函数，只能在这里就地 recover besdk.ScopeOf 的 panic（不会冒到 recovery）。
+func requireUser(ctx context.Context) (err error) {
+	defer func() {
+		if recover() != nil {
+			err = errNoUserIdentity
+		}
+	}()
+	_ = besdk.ScopeOf(ctx)
+	return nil
 }
 
 func toProtoPeriodStatus(s string) financev1.PeriodStatus {
@@ -44,6 +65,9 @@ func (s *server) CheckPeriodOpen(ctx context.Context, req *financev1.CheckPeriod
 }
 
 func (s *server) ClosePeriod(ctx context.Context, req *financev1.ClosePeriodRequest) (*financev1.ClosePeriodResponse, error) {
+	if err := requireUser(ctx); err != nil {
+		return nil, err
+	}
 	status, err := s.svc.ClosePeriod(ctx, repo.PeriodOpInput{
 		IdempotencyKey: req.IdempotencyKey, Period: req.Period, LegalEntityID: req.LegalEntityId,
 	})
@@ -54,6 +78,9 @@ func (s *server) ClosePeriod(ctx context.Context, req *financev1.ClosePeriodRequ
 }
 
 func (s *server) ReopenPeriod(ctx context.Context, req *financev1.ReopenPeriodRequest) (*financev1.ReopenPeriodResponse, error) {
+	if err := requireUser(ctx); err != nil {
+		return nil, err
+	}
 	status, err := s.svc.ReopenPeriod(ctx, repo.PeriodOpInput{
 		IdempotencyKey: req.IdempotencyKey, Period: req.Period, LegalEntityID: req.LegalEntityId,
 	})
@@ -64,6 +91,9 @@ func (s *server) ReopenPeriod(ctx context.Context, req *financev1.ReopenPeriodRe
 }
 
 func (s *server) LockPeriod(ctx context.Context, req *financev1.LockPeriodRequest) (*financev1.LockPeriodResponse, error) {
+	if err := requireUser(ctx); err != nil {
+		return nil, err
+	}
 	status, err := s.svc.LockPeriod(ctx, repo.PeriodOpInput{
 		IdempotencyKey: req.IdempotencyKey, Period: req.Period, LegalEntityID: req.LegalEntityId,
 	})
@@ -137,6 +167,9 @@ func toProtoEntry(e *repo.Entry) *financev1.JournalEntry {
 }
 
 func (s *server) PostManualEntry(ctx context.Context, req *financev1.PostManualEntryRequest) (*financev1.PostManualEntryResponse, error) {
+	if err := requireUser(ctx); err != nil {
+		return nil, err
+	}
 	entry, err := s.svc.PostManualEntry(ctx, repo.PostManualEntryInput{
 		IdempotencyKey: req.IdempotencyKey, LegalEntityID: req.LegalEntityId,
 		Lines: fromProtoLines(req.Lines), Memo: req.Memo,
@@ -148,6 +181,9 @@ func (s *server) PostManualEntry(ctx context.Context, req *financev1.PostManualE
 }
 
 func (s *server) ReverseEntry(ctx context.Context, req *financev1.ReverseEntryRequest) (*financev1.ReverseEntryResponse, error) {
+	if err := requireUser(ctx); err != nil {
+		return nil, err
+	}
 	entry, err := s.svc.ReverseEntry(ctx, repo.ReverseEntryInput{
 		IdempotencyKey: req.IdempotencyKey, EntryID: req.EntryId, Reason: req.Reason,
 	})
@@ -158,6 +194,9 @@ func (s *server) ReverseEntry(ctx context.Context, req *financev1.ReverseEntryRe
 }
 
 func (s *server) GetEntry(ctx context.Context, req *financev1.GetEntryRequest) (*financev1.JournalEntry, error) {
+	if err := requireUser(ctx); err != nil {
+		return nil, err
+	}
 	entry, err := s.svc.GetEntry(ctx, req.Id)
 	if err != nil {
 		return nil, service.ToStatus(err)
@@ -166,6 +205,9 @@ func (s *server) GetEntry(ctx context.Context, req *financev1.GetEntryRequest) (
 }
 
 func (s *server) ListEntries(ctx context.Context, req *financev1.ListEntriesRequest) (*financev1.ListEntriesResponse, error) {
+	if err := requireUser(ctx); err != nil {
+		return nil, err
+	}
 	in := repo.ListInput{Cursor: req.Cursor, PageSize: int(req.PageSize), Period: req.Period}
 	if req.StatusFilter != financev1.EntryStatus_ENTRY_STATUS_UNSPECIFIED {
 		switch req.StatusFilter {
@@ -193,6 +235,9 @@ func (s *server) ListEntries(ctx context.Context, req *financev1.ListEntriesRequ
 }
 
 func (s *server) ListARLedger(ctx context.Context, req *financev1.ListARLedgerRequest) (*financev1.ListARLedgerResponse, error) {
+	if err := requireUser(ctx); err != nil {
+		return nil, err
+	}
 	in := repo.ListARLedgerInput{Cursor: req.Cursor, PageSize: int(req.PageSize), CustomerID: req.CustomerId}
 	if req.CreatedAfter != nil {
 		in.CreatedAfter = req.CreatedAfter.AsTime()

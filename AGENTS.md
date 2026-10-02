@@ -23,7 +23,7 @@ The AI guide to developing this component. How to use it, its boundaries and con
 | `backend/internal/repo/access.go` | `legal_entity_access`: the caller's legal entities, grant, revoke |
 | `backend/internal/service/` | Input validation, the caller's legal entities, the error → gRPC status mapping (`status.go`) |
 | `backend/internal/http/http.go` | REST routes, each registered with its permission key; `parseWindow` |
-| `backend/internal/grpc/grpc.go` | `erp.finance.v1.FinanceService` |
+| `backend/internal/grpc/grpc.go` | `erp.finance.v1.FinanceService`; `requireUser` turns the user-facing rpcs away with `UNAUTHENTICATED` |
 | `backend/internal/consumer/consumer.go` | Subscriptions to the four consumed subjects and their payload structs |
 | `backend/internal/partition/` | Weekly partitions of `event_outbox` / `event_inbox`, four weeks ahead |
 | `migrations/` | SQL migrations, embedded by `migrations/embed.go`; `003` seeds accounts and the FY2026 periods, `008` opens FY2027 |
@@ -78,7 +78,7 @@ Migrations run as the login role `erp_finance_rw`: `make migrate-idempotent` wit
 | Parse an amount with `strconv.ParseFloat` | `"NaN"` posts; a one-cent difference on large amounts is accepted as balanced | Use `parseCents` / `NUMERIC` |
 | Store a decimal from another component's event in a `NUMERIC` column without `parseCents` | PostgreSQL stores `NaN`; every later posting that reads the value fails, and the sales-order event behind it is dropped | Validate on ingest; an invalid credit limit is stored as `0` (no limit) with a Warn |
 | Write `"erp_finance"` as a literal schema anywhere | Works here; with another `PG_SCHEMA` events land in the wrong outbox and are never sent | `publish` takes the schema from `current_schema()` |
-| Call a user-facing service method from gRPC or `Start()` | `besdk.ScopeOf` panics (gRPC answers `INTERNAL`) | Only REST requests carry verified claims |
+| Call a user-facing service method from gRPC or `Start()` without `requireUser` first | `besdk.ScopeOf` panics: the SDK's recovery answers `INTERNAL` and logs an ERROR for what is the caller's mistake | Only REST requests carry verified claims; every user-facing rpc starts with `requireUser`, which answers `UNAUTHENTICATED` |
 | Let the next fiscal year go unopened | From 1 January every posting, including every sales-order event, fails with `NotFound` and the event is dropped | Periods and line partitions exist up to FY2027 (`008`); each new year is a migration until an open-fiscal-year operation exists |
 | Use a fixed `aggregate_id` / `idempotency_key` in a test | The second run is skipped by the inbox or replayed, and the test asserts nothing | Tests use `uniqueID` and `UnixNano` everywhere |
 

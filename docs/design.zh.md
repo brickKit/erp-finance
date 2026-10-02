@@ -54,7 +54,7 @@ gRPC `erp.finance.v1.FinanceService`：
 | `PostManualEntry`、`ReverseEntry` | 写 | 按 `idempotency_key` 幂等 |
 | `GetEntry`、`ListEntries`、`ListARLedger` | 读 | 游标分页，默认窗口最近 90 天 |
 
-面向用户的 rpc 要套用调用者的法人授权，需要验过签的用户身份；gRPC 不带用户身份，所以经 gRPC 调它们会失败（`INTERNAL`）。它们由 REST 提供。
+面向用户的 rpc 要套用调用者的法人授权，需要验过签的用户身份；gRPC 不带用户身份，所以经 gRPC 调它们在进 service 之前就回 `UNAUTHENTICATED`。它们由 REST 提供。
 
 REST 前缀 `/erp/finance`，每条路由都带权限键，并按调用者的法人授权过滤：
 

@@ -23,7 +23,7 @@
 | `backend/internal/repo/access.go` | `legal_entity_access`：调用者能访问的法人、授予、撤销 |
 | `backend/internal/service/` | 入参校验、取调用者的法人授权、错误 → gRPC 状态码映射（`status.go`） |
 | `backend/internal/http/http.go` | REST 路由，每条都带权限键注册；`parseWindow` |
-| `backend/internal/grpc/grpc.go` | `erp.finance.v1.FinanceService` |
+| `backend/internal/grpc/grpc.go` | `erp.finance.v1.FinanceService`；`requireUser` 让面向用户的 rpc 回 `UNAUTHENTICATED` |
 | `backend/internal/consumer/consumer.go` | 四个被消费 subject 的订阅与它们的 payload 结构 |
 | `backend/internal/partition/` | `event_outbox` / `event_inbox` 的周分区，提前四周建好 |
 | `migrations/` | SQL 迁移，由 `migrations/embed.go` 嵌进二进制；`003` 预置科目与 FY2026 的期间，`008` 开 FY2027 |
@@ -78,7 +78,7 @@ make docs-check              # "0 with errors, 0 warnings"
 | 用 `strconv.ParseFloat` 解析金额 | `"NaN"` 能过账；大额时差一分被当成平衡 | 用 `parseCents` / `NUMERIC` |
 | 别的组件事件里的十进制值不过 `parseCents` 就写进 `NUMERIC` 列 | PostgreSQL 照存 `NaN`；之后每一次读到它的过账都失败，背后的销售订单事件被丢掉 | 进库前校验；不合法的额度按 `0`（未配置）存并记 Warn |
 | 在任何地方把 schema 写成字面量 `"erp_finance"` | 这里能跑；换一个 `PG_SCHEMA` 事件就写进别的 outbox，永远发不出去 | `publish` 从 `current_schema()` 取 schema |
-| 从 gRPC 或 `Start()` 调面向用户的 service 方法 | `besdk.ScopeOf` panic（gRPC 回 `INTERNAL`） | 只有 REST 请求带验过签的 Claims |
+| 从 gRPC 或 `Start()` 调面向用户的 service 方法而不先过 `requireUser` | `besdk.ScopeOf` panic：SDK 的 recovery 回 `INTERNAL`，还为调用方的错误记一行 ERROR | 只有 REST 请求带验过签的 Claims；每个面向用户的 rpc 开头先调 `requireUser`，它回 `UNAUTHENTICATED` |
 | 下一个会计年度没开 | 从 1 月 1 日起每一次过账（包括每一条销售订单事件）都以 `NotFound` 失败，事件被丢掉 | 期间与分录行分区只建到 FY2027（`008`）；在有"开会计年度"操作之前，每个新年度都是一份迁移 |
 | 测试里用固定的 `aggregate_id` / `idempotency_key` | 第二次跑时被 inbox 跳过或被幂等重放，测试什么都没测 | 测试一律用 `uniqueID` 与 `UnixNano` |
 

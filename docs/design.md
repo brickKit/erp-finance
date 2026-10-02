@@ -54,7 +54,7 @@ gRPC `erp.finance.v1.FinanceService`:
 | `PostManualEntry`, `ReverseEntry` | write | idempotent by `idempotency_key` |
 | `GetEntry`, `ListEntries`, `ListARLedger` | read | cursor paging, default window the last 90 days |
 
-The user-facing rpcs apply the caller's legal entities, which needs a verified user identity; gRPC carries none, so over gRPC they fail (`INTERNAL`). They are served on REST.
+The user-facing rpcs apply the caller's legal entities, which needs a verified user identity; gRPC carries none, so over gRPC they answer `UNAUTHENTICATED` before reaching the service. They are served on REST.
 
 REST under `/erp/finance`, every route behind a key and filtered by the caller's legal entities:
 

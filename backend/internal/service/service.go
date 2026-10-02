@@ -27,10 +27,9 @@ func New(r *repo.Repo, logger *slog.Logger) *Service {
 
 // allowedLegalEntityIDs 查调用者的 legal_entity_access 授权列表，所有面向用户的
 // 读写方法都先走这一步。它要求 ctx 里有 RequirePermission 验过签的 Claims，所以
-// 只在 REST 的用户请求路径上成立：gRPC 没有用户身份透传，gRPC 的 ClosePeriod、
-// PostManualEntry、ListEntries 等走到这里时 besdk.ScopeOf 会 panic（SDK 的 gRPC
-// recovery 把它变成 Internal）。组件之间用的 CheckPeriodOpen、GetCreditExposure、
-// BatchGetCreditExposure 不经过这里。
+// 只在 REST 的用户请求路径上成立：gRPC 没有用户身份透传，gRPC 层的 requireUser
+// 在调到这里之前就回 Unauthenticated（否则 besdk.ScopeOf 会 panic）。组件之间用的
+// CheckPeriodOpen、GetCreditExposure、BatchGetCreditExposure 不经过这里。
 func (s *Service) allowedLegalEntityIDs(ctx context.Context) ([]string, error) {
 	sub := besdk.ScopeOf(ctx).Owner
 	return s.repo.LegalEntityIDsFor(ctx, sub)
