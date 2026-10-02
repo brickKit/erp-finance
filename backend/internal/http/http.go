@@ -203,6 +203,7 @@ func listEntriesHandler(svc *service.Service) gin.HandlerFunc {
 		out, err := svc.ListEntries(c.Request.Context(), repo.ListInput{
 			Cursor: c.Query("cursor"), PageSize: pageSize,
 			Period: c.Query("period"), StatusFilter: c.Query("status_filter"),
+			SourceDocID: c.Query("source_doc_id"), SourceDocType: c.Query("source_doc_type"),
 			CreatedAfter: after, CreatedBefore: before,
 		})
 		if err != nil {

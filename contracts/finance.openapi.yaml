@@ -100,6 +100,14 @@ paths:
         - name: status_filter
           in: query
           schema: { $ref: "#/components/schemas/EntryStatus" }
+        - name: source_doc_id
+          in: query
+          schema: { type: string }
+          description: 只看这张源单生成的凭证（与 JournalEntry.source_doc_id 相等），例如订单详情页反查对应凭证
+        - name: source_doc_type
+          in: query
+          schema: { type: string }
+          description: 只看这类源单生成的凭证，例如 order（销售订单）、movement（库存流水）、reversal（红字冲销）
         - name: created_after
           in: query
           schema: { type: string, format: date-time }

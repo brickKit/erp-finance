@@ -187,3 +187,21 @@ func TestListARLedger_REST按created_after放宽默认时间窗口(t *testing.T)
 		t.Fatalf("created_before 不是 RFC 3339 时间应返回 400，实际 %d", code)
 	}
 }
+
+func TestListEntries_REST透传source_doc_id与source_doc_type(t *testing.T) {
+	r, _ := testRepo(t)
+	ctx := context.Background()
+	order := uniqueID("http-src-order")
+	if _, err := r.PostSalesOrderEntry(ctx, repo.SalesOrderEventInput{OrderID: order, CustomerID: uniqueID("http-src-cust"), Amount: "2.00", EventVersion: 1}); err != nil {
+		t.Fatal(err)
+	}
+	sub := newSub(t, r, "default")
+	code, body := get(t, r, sub, "/entries", url.Values{"source_doc_id": {order}, "source_doc_type": {"order"}})
+	if code != http.StatusOK {
+		t.Fatalf("期望 200，实际 %d", code)
+	}
+	items, _ := body["entries"].([]any)
+	if len(items) != 1 || items[0].(map[string]any)["source_doc_id"] != order {
+		t.Fatalf("按 source_doc_id 过滤应该恰好得到 1 张凭证，实际 %d 张", len(items))
+	}
+}

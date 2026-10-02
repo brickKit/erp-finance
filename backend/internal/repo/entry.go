@@ -430,6 +430,8 @@ type ListInput struct {
 	PageSize      int
 	Period        string
 	StatusFilter  string
+	SourceDocID   string
+	SourceDocType string
 	CreatedAfter  time.Time
 	CreatedBefore time.Time
 	// AllowedLegalEntityIDs 见 period.go 的 PeriodOpInput 同名字段注释
@@ -472,6 +474,14 @@ func (r *Repo) ListEntries(ctx context.Context, in ListInput) (*ListResult, erro
 		if in.StatusFilter != "" {
 			args = append(args, in.StatusFilter)
 			query += fmt.Sprintf(" AND status = $%d", len(args))
+		}
+		if in.SourceDocID != "" {
+			args = append(args, in.SourceDocID)
+			query += fmt.Sprintf(" AND source_doc_id = $%d", len(args))
+		}
+		if in.SourceDocType != "" {
+			args = append(args, in.SourceDocType)
+			query += fmt.Sprintf(" AND source_doc_type = $%d", len(args))
 		}
 		if ck != nil {
 			args = append(args, ck.CreatedAt, ck.ID)
