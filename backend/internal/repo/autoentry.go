@@ -138,19 +138,21 @@ func (r *Repo) PostSalesOrderEntry(ctx context.Context, in SalesOrderEventInput)
 	return duplicate, err
 }
 
+// exceedsLimit：已用额度严格大于额度值才算超限，按分精确比较。limit 为 0 视为
+// "还没配额度"，不拦。两个值都来自 NUMERIC(18,2) 列的文本形式。
 func exceedsLimit(exposure, limit string) (bool, error) {
-	limitF, err := strconv.ParseFloat(limit, 64)
+	l, err := parseCents("credit_limit", limit)
 	if err != nil {
-		return false, fmt.Errorf("解析 credit_limit: %w", err)
+		return false, err
 	}
-	if limitF == 0 {
-		return false, nil // 未配额度，不拦
+	if l.Sign() == 0 {
+		return false, nil
 	}
-	exposureF, err := strconv.ParseFloat(exposure, 64)
+	e, err := parseCents("exposure", exposure)
 	if err != nil {
-		return false, fmt.Errorf("解析 exposure: %w", err)
+		return false, err
 	}
-	return exposureF > limitF, nil
+	return e.Cmp(l) > 0, nil
 }
 
 func publishCreditRejected(tx *sql.Tx, customerID, orderID, exposure, limit string) error {
@@ -260,12 +262,9 @@ func accountsForInventoryReason(reason string) (debitCode, creditCode string) {
 }
 
 func placeholderAmount(qtyDelta string) (string, error) {
-	f, err := strconv.ParseFloat(qtyDelta, 64)
+	c, err := absRoundCents("qty_delta", qtyDelta)
 	if err != nil {
-		return "", fmt.Errorf("%w: qty_delta 不是合法数字：%q", ErrInvalidArgument, qtyDelta)
+		return "", err
 	}
-	if f < 0 {
-		f = -f
-	}
-	return strconv.FormatFloat(f, 'f', 2, 64), nil
+	return formatCents(c), nil
 }

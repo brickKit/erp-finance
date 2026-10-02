@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"strconv"
 	"time"
 
@@ -128,48 +129,32 @@ func postEntryTx(ctx context.Context, tx *sql.Tx, in postEntryTxInput) (*Entry, 
 	}, nil
 }
 
-// validateBalanced 校验借贷相等——复式记账的基本要求。金额是
-// decimal-as-string，用 strconv.ParseFloat 只做求和校验，不参与落库
-// （落库交给 NUMERIC，同 mdm-product 的 validateStandardCost 判据）。
+// validateBalanced 校验每一行恰好一边非零、借贷合计相等——复式记账的基本要求。
+// 按分精确比较（见 money.go），不容忍任何误差。
 func validateBalanced(lines []Line) error {
-	var debitSum, creditSum float64
+	debitSum, creditSum := new(big.Int), new(big.Int)
 	for _, l := range lines {
-		d, err := parseAmount("debit", l.Debit)
+		d, err := parseCents("debit", l.Debit)
 		if err != nil {
 			return err
 		}
-		c, err := parseAmount("credit", l.Credit)
+		c, err := parseCents("credit", l.Credit)
 		if err != nil {
 			return err
 		}
-		if d > 0 && c > 0 {
+		if d.Sign() > 0 && c.Sign() > 0 {
 			return fmt.Errorf("%w: 一行不能同时有借方和贷方", ErrInvalidArgument)
 		}
-		if d == 0 && c == 0 {
+		if d.Sign() == 0 && c.Sign() == 0 {
 			return fmt.Errorf("%w: 一行必须有借方或贷方，不能都是 0", ErrInvalidArgument)
 		}
-		debitSum += d
-		creditSum += c
+		debitSum.Add(debitSum, d)
+		creditSum.Add(creditSum, c)
 	}
-	// 浮点误差容忍到分（NUMERIC(18,2)）
-	if diff := debitSum - creditSum; diff > 0.005 || diff < -0.005 {
-		return fmt.Errorf("%w: 借方合计 %.2f，贷方合计 %.2f", ErrUnbalancedEntry, debitSum, creditSum)
+	if debitSum.Cmp(creditSum) != 0 {
+		return fmt.Errorf("%w: 借方合计 %s，贷方合计 %s", ErrUnbalancedEntry, formatCents(debitSum), formatCents(creditSum))
 	}
 	return nil
-}
-
-func parseAmount(field, s string) (float64, error) {
-	if s == "" {
-		return 0, nil
-	}
-	f, err := strconv.ParseFloat(s, 64)
-	if err != nil {
-		return 0, fmt.Errorf("%w: %s 不是合法数字：%q", ErrInvalidArgument, field, s)
-	}
-	if f < 0 {
-		return 0, fmt.Errorf("%w: %s 不能为负数：%q", ErrInvalidArgument, field, s)
-	}
-	return f, nil
 }
 
 func zeroIfEmpty(s string) string {
@@ -179,13 +164,15 @@ func zeroIfEmpty(s string) string {
 	return s
 }
 
+// totalAmount 是凭证金额（借方合计）。只在 validateBalanced 通过之后调用，所以
+// 每一行的金额都已经是合法格式。
 func totalAmount(lines []Line) string {
-	var sum float64
+	sum := new(big.Int)
 	for _, l := range lines {
-		d, _ := strconv.ParseFloat(zeroIfEmpty(l.Debit), 64)
-		sum += d
+		d, _ := parseCents("debit", l.Debit)
+		sum.Add(sum, d)
 	}
-	return strconv.FormatFloat(sum, 'f', 2, 64)
+	return formatCents(sum)
 }
 
 func publishVoucherPosted(tx *sql.Tx, entryID, entryNo, postNo, period, amount string) error {
