@@ -69,7 +69,7 @@ func TestPostSalesOrderEntry_大额超限一分也发creditRejected(t *testing.T
 	customerID := uniqueID("cust-bigl")
 	orderID := uniqueID("order-bigl")
 	if err := besdk.WithTx(ctx, db, "erp_finance_rw", "erp_finance", func(tx *sql.Tx) error {
-		return UpsertCustomerCreditSnapshotTx(tx, customerID, "9999999999999999.98", 1)
+		return UpsertCustomerSnapshotTx(tx, customerID, "", "9999999999999999.98", 1)
 	}); err != nil {
 		t.Fatal(err)
 	}

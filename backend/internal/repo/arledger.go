@@ -14,23 +14,27 @@ import (
 )
 
 type ARLedgerEntry struct {
-	ID         string
-	CustomerID string
-	EntryID    string
-	Amount     string
-	Reconciled string
-	CreatedAt  time.Time
+	ID           string
+	CustomerID   string
+	CustomerName string
+	EntryID      string
+	Amount       string
+	Reconciled   string
+	Outstanding  string
+	DueDate      string
+	CreatedAt    time.Time
 }
 
-func insertARLedgerEntryTx(ctx context.Context, tx *sql.Tx, customerID, entryID, legalEntityID, amount string) error {
+// insertARLedgerEntryTx 写一行应收。dueDate 是到期日（账龄从它算起）。
+func insertARLedgerEntryTx(ctx context.Context, tx *sql.Tx, customerID, entryID, legalEntityID, amount string, dueDate time.Time) error {
 	entryIDInt, err := parseID("entry_id", entryID)
 	if err != nil {
 		return err
 	}
 	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO ar_ledger (customer_id, entry_id, legal_entity_id, amount)
-		VALUES ($1, $2, $3, $4)`,
-		customerID, entryIDInt, legalEntityID, amount); err != nil {
+		INSERT INTO ar_ledger (customer_id, entry_id, legal_entity_id, amount, due_date)
+		VALUES ($1, $2, $3, $4, $5)`,
+		customerID, entryIDInt, legalEntityID, amount, dueDate.UTC().Format("2006-01-02")); err != nil {
 		return fmt.Errorf("写 ar_ledger: %w", err)
 	}
 	return nil
@@ -62,21 +66,25 @@ func (r *Repo) ListARLedger(ctx context.Context, in ListARLedgerInput) (*ListARL
 
 	var out ListARLedgerResult
 	err = besdk.WithTx(ctx, r.db, r.role, r.schema, func(tx *sql.Tx) error {
-		query := `SELECT id, customer_id, entry_id, amount, reconciled_amount, created_at
-			FROM ar_ledger WHERE created_at >= $1 AND created_at <= $2`
+		// 客户名取自客户摘要副本（LEFT JOIN：没收到过这个客户的事件就是空串）；
+		// 未核销余额在 SQL 里按 NUMERIC 算，不经过浮点。
+		query := `SELECT a.id, a.customer_id, COALESCE(s.name, ''), a.entry_id, a.amount, a.reconciled_amount,
+				(a.amount - a.reconciled_amount)::numeric(18,2)::text, to_char(a.due_date, 'YYYY-MM-DD'), a.created_at
+			FROM ar_ledger a LEFT JOIN customer_credit_snapshots s ON s.customer_id = a.customer_id
+			WHERE a.created_at >= $1 AND a.created_at <= $2`
 		args := []any{q.From, q.To}
 		args = append(args, in.AllowedLegalEntityIDs)
-		query += fmt.Sprintf(" AND legal_entity_id = ANY($%d::text[])", len(args))
+		query += fmt.Sprintf(" AND a.legal_entity_id = ANY($%d::text[])", len(args))
 		if in.CustomerID != "" {
 			args = append(args, in.CustomerID)
-			query += fmt.Sprintf(" AND customer_id = $%d", len(args))
+			query += fmt.Sprintf(" AND a.customer_id = $%d", len(args))
 		}
 		if ck != nil {
 			args = append(args, ck.CreatedAt, ck.ID)
-			query += fmt.Sprintf(" AND (created_at, id) < ($%d, $%d)", len(args)-1, len(args))
+			query += fmt.Sprintf(" AND (a.created_at, a.id) < ($%d, $%d)", len(args)-1, len(args))
 		}
 		args = append(args, q.Limit+1)
-		query += fmt.Sprintf(" ORDER BY created_at DESC, id DESC LIMIT $%d", len(args))
+		query += fmt.Sprintf(" ORDER BY a.created_at DESC, a.id DESC LIMIT $%d", len(args))
 
 		rows, err := tx.QueryContext(ctx, query, args...)
 		if err != nil {
@@ -88,7 +96,8 @@ func (r *Repo) ListARLedger(ctx context.Context, in ListARLedgerInput) (*ListARL
 		for rows.Next() {
 			var e ARLedgerEntry
 			var rawID, rawEntryID int64
-			if err := rows.Scan(&rawID, &e.CustomerID, &rawEntryID, &e.Amount, &e.Reconciled, &e.CreatedAt); err != nil {
+			if err := rows.Scan(&rawID, &e.CustomerID, &e.CustomerName, &rawEntryID, &e.Amount, &e.Reconciled,
+				&e.Outstanding, &e.DueDate, &e.CreatedAt); err != nil {
 				return err
 			}
 			e.ID = strconv.FormatInt(rawID, 10)

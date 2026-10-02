@@ -237,9 +237,9 @@ func listARLedgerHandler(svc *service.Service) gin.HandlerFunc {
 		dtos := make([]gin.H, 0, len(out.Entries))
 		for _, e := range out.Entries {
 			dtos = append(dtos, gin.H{
-				"id": e.ID, "customer_id": e.CustomerID, "entry_id": e.EntryID,
-				"amount": e.Amount, "reconciled_amount": e.Reconciled,
-				"created_at": e.CreatedAt.Format(rfc3339),
+				"id": e.ID, "customer_id": e.CustomerID, "customer_name": e.CustomerName, "entry_id": e.EntryID,
+				"amount": e.Amount, "reconciled_amount": e.Reconciled, "outstanding": e.Outstanding,
+				"due_date": e.DueDate, "created_at": e.CreatedAt.Format(rfc3339),
 			})
 		}
 		c.JSON(http.StatusOK, gin.H{"entries": dtos, "next_cursor": out.NextCursor})

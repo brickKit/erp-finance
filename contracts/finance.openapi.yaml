@@ -296,3 +296,13 @@ components:
         amount: { type: string }
         reconciled_amount: { type: string }
         created_at: { type: string, format: date-time }
+        customer_name:
+          type: string
+          description: 客户名，取自本组件消费 mdm.customer.* 事件维护的客户摘要副本；还没收到过这个客户的事件时为空串
+        outstanding:
+          type: string
+          description: 未核销余额 = amount - reconciled_amount，服务端按十进制算（decimal-as-string）
+        due_date:
+          type: string
+          format: date
+          description: 到期日（YYYY-MM-DD），账龄从它算起；上游不带付款条件时等于记账当天

@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
@@ -206,5 +207,48 @@ func TestConsumer_客户事件维护信用额度摘要副本(t *testing.T) {
 	}
 	if limit != "8000.00" {
 		t.Fatalf("期望 credit_limit=8000.00，实际 %q", limit)
+	}
+}
+
+// 客户事件里的 name 进客户摘要副本，应收台账据此显示客户名；改名的 updated 事件
+// （version 更大）覆盖旧名字。
+func TestConsumer_客户事件维护客户名(t *testing.T) {
+	db := testDB(t)
+	nc, err := nats.Connect(natsURLForTest(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer nc.Close()
+
+	customerID := fmt.Sprintf("consumer-name-%d", time.Now().UnixNano())
+	created, updated := testSubject("mdm.customer.created.v1"), testSubject("mdm.customer.updated.v1")
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	var wg sync.WaitGroup
+	for _, subj := range []string{created, updated} {
+		wg.Add(1)
+		go func(subj string) {
+			defer wg.Done()
+			_ = besdk.Consume(ctx, nc, db, "erp_finance_rw", "erp_finance", subj, customerSnapshotHandler())
+		}(subj)
+	}
+	time.Sleep(150 * time.Millisecond)
+
+	publishEvent(t, nc, created, customerID, 1, fmt.Sprintf(`{"id":%q,"code":"C1","name":"旧名字","credit_limit":"1.00","status":"ACTIVE","version":1}`, customerID))
+	nc.Flush()
+	time.Sleep(300 * time.Millisecond)
+	publishEvent(t, nc, updated, customerID, 2, fmt.Sprintf(`{"id":%q,"name":"新名字","credit_limit":"2.00","status":"ACTIVE","version":2}`, customerID))
+	nc.Flush()
+	time.Sleep(400 * time.Millisecond)
+	cancel()
+	wg.Wait()
+
+	var name, limit string
+	if err := db.QueryRow(`SELECT name, credit_limit::text FROM erp_finance.customer_credit_snapshots WHERE customer_id = $1`,
+		customerID).Scan(&name, &limit); err != nil {
+		t.Fatal(err)
+	}
+	if name != "新名字" || limit != "2.00" {
+		t.Fatalf("期望 name=新名字 credit_limit=2.00，实际 %q %q", name, limit)
 	}
 }

@@ -205,3 +205,29 @@ func TestListEntries_REST透传source_doc_id与source_doc_type(t *testing.T) {
 		t.Fatalf("按 source_doc_id 过滤应该恰好得到 1 张凭证，实际 %d 张", len(items))
 	}
 }
+
+func TestListARLedger_REST返回客户名未核销余额与到期日(t *testing.T) {
+	r, db := testRepo(t)
+	ctx := context.Background()
+	customer := uniqueID("http-ar-name")
+	if err := besdk.WithTx(ctx, db, role, schema, func(tx *sql.Tx) error {
+		return repo.UpsertCustomerSnapshotTx(tx, customer, "「本地测试」华北贸易", "0", 1)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.PostSalesOrderEntry(ctx, repo.SalesOrderEventInput{OrderID: uniqueID("http-ar-order"), CustomerID: customer, Amount: "12.34", EventVersion: 1}); err != nil {
+		t.Fatal(err)
+	}
+	code, body := get(t, r, newSub(t, r, "default"), "/ar-ledger", url.Values{"customer_id": {customer}})
+	if code != http.StatusOK {
+		t.Fatalf("期望 200，实际 %d", code)
+	}
+	items, _ := body["entries"].([]any)
+	if len(items) != 1 {
+		t.Fatalf("期望 1 行，实际 %d", len(items))
+	}
+	row := items[0].(map[string]any)
+	if row["customer_name"] != "「本地测试」华北贸易" || row["outstanding"] != "12.34" || row["due_date"] != time.Now().UTC().Format("2006-01-02") {
+		t.Fatalf("customer_name / outstanding / due_date 不对：%v", row)
+	}
+}

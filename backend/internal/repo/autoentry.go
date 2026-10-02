@@ -51,8 +51,9 @@ func postSalesOrderEntryTx(ctx context.Context, tx *sql.Tx, in SalesOrderEventIn
 		legalEntityID = defaultLegalEntityID
 	}
 
+	businessDate := time.Now().UTC()
 	entry, err := postEntryTx(ctx, tx, postEntryTxInput{
-		LegalEntityID: legalEntityID, BusinessDate: time.Now().UTC(),
+		LegalEntityID: legalEntityID, BusinessDate: businessDate,
 		Lines: []Line{
 			{AccountCode: "1122", Debit: in.Amount},
 			{AccountCode: "6001", Credit: in.Amount},
@@ -67,7 +68,8 @@ func postSalesOrderEntryTx(ctx context.Context, tx *sql.Tx, in SalesOrderEventIn
 		return false, err
 	}
 
-	if err := insertARLedgerEntryTx(ctx, tx, in.CustomerID, entry.ID, legalEntityID, in.Amount); err != nil {
+	// 上游事件不带付款条件：到期日就是记账当天（见即付）。
+	if err := insertARLedgerEntryTx(ctx, tx, in.CustomerID, entry.ID, legalEntityID, in.Amount, businessDate); err != nil {
 		return false, err
 	}
 

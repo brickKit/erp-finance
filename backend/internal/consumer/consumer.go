@@ -106,6 +106,7 @@ func inventoryAdjustedHandler(logger *slog.Logger) func(context.Context, *sql.Tx
 
 type customerPayload struct {
 	ID          string `json:"id"`
+	Name        string `json:"name"`
 	CreditLimit string `json:"credit_limit"`
 }
 
@@ -115,6 +116,6 @@ func customerSnapshotHandler() func(context.Context, *sql.Tx, besdk.Event) error
 		if err := json.Unmarshal(ev.Payload, &p); err != nil {
 			return fmt.Errorf("解析 %s payload: %w", ev.Subject, err)
 		}
-		return repo.UpsertCustomerCreditSnapshotTx(tx, p.ID, p.CreditLimit, ev.Version)
+		return repo.UpsertCustomerSnapshotTx(tx, p.ID, p.Name, p.CreditLimit, ev.Version)
 	}
 }
