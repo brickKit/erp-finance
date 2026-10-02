@@ -9,8 +9,8 @@ import (
 
 	financev1 "github.com/brickKit/erp-finance/gen/erp/finance/v1"
 
-	"github.com/brickKit/erp-finance/backend/internal/repo"
-	"github.com/brickKit/erp-finance/backend/internal/service"
+	"github.com/brickKit/erp-finance/v2/backend/internal/repo"
+	"github.com/brickKit/erp-finance/v2/backend/internal/service"
 )
 
 type server struct {

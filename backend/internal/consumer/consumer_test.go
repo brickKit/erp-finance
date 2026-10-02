@@ -11,7 +11,7 @@ import (
 	"time"
 
 	besdk "github.com/brickKit/be-sdk-go"
-	"github.com/brickKit/erp-finance/backend/internal/repo"
+	"github.com/brickKit/erp-finance/v2/backend/internal/repo"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/nats-io/nats.go"
 )

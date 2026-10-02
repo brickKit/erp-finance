@@ -2,76 +2,11 @@ apiVersion: brickkit/v1
 kind: Component
 
 metadata:
-  id: erp/finance                    # ⚠️ Fork 件必须与标准件完全一致（§3.4.1）
-  name: 财务管理
-  version: 1.0.14                     # 精确版本，不接受 ^ / ~ / latest
-                                      # v1.0.14：同 erp/inventory 这次改动，scripts/seed.sh 改成 source infra/scripts/lib/seed-net.sh（含 with_toolbox/get_app_jwt/sub_of），理由同上。真机跑通 make seed（5 张人工凭证+会计期间三态流转+历史时间回填），无业务行为/契约变更。
-                                      # v1.0.13：同 erp/inventory 这次改动的 REST 部分——scripts/seed.sh 假设 CASDOOR/IAM/FIN 三个地址都是宿主机 localhost 端口，servedBy 合并部署下后两者不再成立。改成一次性工具箱容器 + ServiceName() 地址规则。真机在 servedBy 部署下跑通 make seed（5 张凭证 + 会计期间三态流转）。无业务行为/契约变更。
-                                      # v1.0.12：同 mdm/customer 这次改动，删掉 deployment.labels 的 prometheus.io/port，理由同上。无业务行为/契约变更。
-                                      # v1.0.11：import-scan 门禁提前补上铁律六第二类白名单（github.com/brickKit/<repo>/gen/...，设计书§13.3），跟 erp-sales/be-acceptance 那批一起定的规矩保持一致——本组件目前没有任何代码实际用到这条豁免，纯粹是为了跟中心化门禁（be-acceptance 的 ImportScan）和其它组件的判据保持同一份逻辑，不是遗漏也不改变任何现有行为。
-                                     # v1.0.10：gen/erp/finance 拆成独立嵌套 go module（module 边界切在 v1 目录上一级，因为 Go 模块路径禁止以字面量 /v1 结尾）——为了让外壳（shells/go）能在合并部署时用自己的 go.mod replace 把 erp-sales vendor 的同一份契约镜像重定向到这里，避免两份逐字复制的生成代码在同一个 protobuf 全局注册表里重复注册同一个文件/类型全名而 panic（TestRun_go_core外壳全部5个真实模块合并进一个进程真机测出来的，阶段四调研记录 04 §13 有完整推演）。本仓库自己 standalone 构建/测试用本地 replace 完全不受影响，import-scan/单测全绿。无业务行为/ 契约变更。
-                                      # v1.0.9：消费者测试改用测试私有 subject
-                                      # （`testSubject()`），不再直接订阅/发布生产 subject
-                                      # 字面量——04-testing-standard.md §3.4 第一条要求，
-                                      # 系统排查测试完整性时发现全项目只有 infra-notification
-                                      # 落地过这条，本组件与 erp-inventory/erp-sales/
-                                      # integration-im-dingtalk 同一批补齐（field-tested-
-                                      # pitfalls-log.md 类别 E 的 E2）。纯测试基础设施修复，
-                                      # 无行为/契约变更。
-                                      # v1.0.8：补 TestProperty_借贷不平衡的分录被拒绝且
-                                      # 不落库/TestProperty_PostManualEntry并发同key仅
-                                      # 执行一次——04-testing-standard.md §3.2 对"核心
-                                      # 交易类组件"的强制要求（L2 必须用属性测试，例子
-                                      # 测试不够），全项目系统排查测试完整性时发现三个
-                                      # 核心交易类组件（本组件/erp-inventory/erp-sales）
-                                      # 从建组件起就没写过一个属性测试，此次补齐。用
-                                      # rapid 随机拼借贷分录行攻击"借贷必须相等"这条
-                                      # 复式记账唯一不变式；并补上此前从没测过的"并发
-                                      # 同 key 只执行一次"。顺带修了
-                                      # TestListEntries_看不到别的法人的凭证 这条既有
-                                      # 测试自己的 bug：夹具函数里两条裸 SQL
-                                      # （seedPeriodForLegalEntity/seedEntryForLegalEntity）
-                                      # 缺 erp_finance schema 前缀，用标准文档里例的
-                                      # TEST_PG_DSN 直连会报"relation does not exist"——
-                                      # 这是本次做完整测试排查时才发现的既有红，与本次
-                                      # 属性测试新增本身无关。纯补测试+修测试夹具自身
-                                      # 的 bug，无行为/契约变更。
-                                      # v1.0.7：补齐 README.md 的"怎么起来"/"怎么用"/
-                                      # "配置项"三节——建仓库时留的占位符一直没人回来
-                                      # 填，`make docs-check` 的占位符检测正则同时修正
-                                      # （原来只查 TBD/TODO/待补，没覆盖实际用的"后补"
-                                      # 措辞）。纯文档，无行为/契约变更。
-                                      # v1.0.6：新增 make seed（从零设计，AGENTS.md 原文点名
-                                      # "几乎没有专属演示数据"）——5 张 PostManualEntry 人工
-                                      # 凭证（覆盖 5 个科目 + 单行/四行多行 + 待冲销样例真做
-                                      # 一次 ReverseEntry）+ 期间三态生命周期演示（close→lock
-                                      # 终态、close→reopen 往返、只 close）+
-                                      # legal_entity_access 授权 dev.superuser/
-                                      # dev.finance.viewer（同 erp-inventory 的
-                                      # warehouse_access 判据）；新增 make db-reset（同
-                                      # erp-inventory：entry_no_seq/post_no 计数器"只增不
-                                      # 回退" + LockPeriod 是契约里唯一的终态，逐行 DELETE
-                                      # 做不到干净复原，只能整库重置）。旁路修复一个真实
-                                      # bug：003_seed_accounts_and_periods.down.sql 的 DELETE
-                                      # 在 migrate down 倒序执行时会撞
-                                      # finance_journal_entries 的外键（同 erp-inventory
-                                      # 003_seed_warehouses.down.sql 踩过的坑），真机跑
-                                      # db-reset 前已按同一模式预先改成空文件，随后真机验证
-                                      # db-reset 一次成功，记入踩坑记录 C23。无破坏性变更。
-                                      # v1.0.5：docs/手册.md 的 TEST_PG_DSN 示例改指向
-                                      # brickkit_test_db，纯文档，无行为/契约变更
-                                      # v1.0.4：补 ListEntries 的真实跨法人排除测试
-                                      # （TestListEntries_看不到别的法人的凭证）——
-                                      # 过程中发现一个真实但当前不可触发的设计缺口
-                                      # （post_no 不含 legal_entity_id 但按
-                                      # (period,legal_entity_id) 独立计数，两个法人
-                                      # 同期间各自首次过账会撞同一个 post_no，记入
-                                      # 踩坑记录 C17，未改产品代码）。纯补测试，无
-                                      # 行为/契约变更。
-                                      # v1.0.2：纯 Makefile 门禁加固（check-version
-                                      # 新增 deployment.image 与 version 一致性判据，
-                                      # 阶段三 Task 4 发现其余四个组件的这条真的分叉过）
-  description: 会计科目表、总账分录、应收/应付台账、会计期间锁、对账——事件汇枢纽
+  id: erp/finance
+  name: Finance
+  version: 2.0.0
+  description: Chart of accounts, general ledger entries, receivable and payable ledgers, period locks and reconciliation.
+  repository: https://github.com/brickKit/erp-finance
   license: Apache-2.0
   vendor: brickKit
 
@@ -80,65 +15,50 @@ tags: [erp, finance, accounting]
 artifacts:
   - type: api-contract
     format: protobuf
-    files:
-      - contracts/erp/finance/v1/finance.proto
-      - contracts/events/finance.events.json
+    files: [contracts/erp/finance/v1/finance.proto, contracts/events/finance.events.json]
   - type: api-contract
     format: openapi
     files: [contracts/finance.openapi.yaml]
-  - type: metadata                   # ← assembly.yaml 靠这一条随组件分发（§3.5）
+  - type: metadata
     files: [assembly.yaml]
 
 dependencies:
-  components: []                     # ⚠️ 本组件是事件汇枢纽，零出边（设计计划 §5、§6）。
-                                      # 只消费事件（erp-sales/erp-inventory/mdm-customer），
-                                      # 不建任何同步依赖边
-  resources:
-    # ⚠️ engine 逐字参与匹配（设计书 §2.7.3.1）：这里写的词必须与
-    #    brickkit.yaml 的 resources[].engine 完全相同，平台不认别名。
-    - { kind: database, engine: postgresql }   # 产品名：不在替换范围
-    - { kind: mq,       engine: nats }         # 产品名：换 Kafka 是一次迁移，要让平台阻断
+  components: []
 
 configSchema:
   type: object
   properties:
-    pgSchema:                        # ⚠️ 不能叫 databaseSchema，DATABASE_ 是保留前缀
-      type: string
-      default: erp_finance
-    iamJwksUrl:                      # JWT 本地验签的公钥来源。不对 IAM 建依赖边（决策 87）
-      type: string
-    authzBundleUrl:                  # 阶段三 Task 6：功能权限判定的 bundle 轮询地址，
-                                      # 指向 infra-authz。不建依赖边（同 iamJwksUrl 的
-                                      # 判据，设计书 §14.1.4）
-      type: string
-    otelBaseUrl:                     # ⚠️ 不能叫 otelEndpoint，*_ENDPOINT 是保留后缀
-      type: string
-      default: ""                    # 空 → Blackhole Exporter，零成本（§7.5）
+    PG_HOST: {type: string}
+    PG_PORT: {type: string, default: "5432"}
+    PG_DATABASE: {type: string}
+    PG_USER: {type: string}
+    PG_PASSWORD: {type: string, secret: true}
+    PG_SCHEMA: {type: string, default: erp_finance}
+    NATS_URL: {type: string}
+    OTEL_BASE_URL: {type: string, default: ""}
+    AUTHZ_BUNDLE_URL: {type: string}
+    IAM_JWKS_URL: {type: string}
+  required: [PG_HOST, PG_DATABASE, PG_USER, PG_PASSWORD, NATS_URL, AUTHZ_BUNDLE_URL, IAM_JWKS_URL]
 
 deployment:
   type: container
-  image: brickenterprise/erp-finance:1.0.14
-  port: 8087                         # 端口册 registry/ports.tsv
+  build: {context: ., dockerfile: Dockerfile}
+  port: 8087
   extraPorts:
-    - { name: grpc, port: 9097 }     # → ERP_FINANCE_GRPC_ENDPOINT（值仍以 http:// 开头）
-  labels:                            # 平台只搬运，不解释键值。值必须是字符串
+    - {name: grpc, port: 9097}
+  labels:
     prometheus.io/scrape: "true"
-    # prometheus.io/port 原来写在这里——阶段四附加 Task 0.1 真机验证
-    # servedBy 时发现这个标签会跟同外壳其它成员的 prometheus.io/port 撞车
-    # 报错（每个组件的值天然不同，servedBy 的 labels 合并规则没有像 env
-    # 变量合并那样排除这类"语义上必然因组件而异"的标签，已反馈给 brickKit，
-    # 见装配仓库 docs/dev/brickKit反馈-servedBy的labels合并漏了排除规则.md）。
-    # 在 brickKit 修复或给出结论之前，暂时从这里删掉，只在合并后的外壳
-    # 自己的条目上保留一份——跟"合并后指标只能走一个共享抓取端口"这个
-    # 事实本来就一致，不是单纯绕过。
-    prometheus.io/path: "/metrics"
+    prometheus.io/path: /metrics
   resources:
-    requests: { cpu: "150m", memory: "192Mi" }
+    requests: {cpu: 150m, memory: 192Mi}
 
 migration:
-  command: ["./migrate", "up"]
+  command: [./migrate, up]
 
 healthCheck:
   type: http
-  path: /healthz                     # ⚠️ 只查本进程存活，严禁查库或查依赖组件（§12.3.6）
-  # startPeriodSeconds 不写：默认就是 60，Go 组件够用（§12.3.5）
+  path: /healthz
+
+local:
+  language: go
+  runCommand: [go, run, ./backend/cmd/server]

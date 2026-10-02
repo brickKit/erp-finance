@@ -11,7 +11,7 @@ import (
 	"log/slog"
 
 	besdk "github.com/brickKit/be-sdk-go"
-	"github.com/brickKit/erp-finance/backend/internal/repo"
+	"github.com/brickKit/erp-finance/v2/backend/internal/repo"
 )
 
 var ErrInvalidArgument = errors.New("参数不合法")
