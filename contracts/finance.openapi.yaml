@@ -226,6 +226,50 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ARLedgerSummary" }
 
+  /legal-entity-access/{sub}:
+    get:
+      summary: 列出某个用户能访问的法人（权限键 erp.finance.manage_access）
+      operationId: listLegalEntityAccess
+      parameters:
+        - { name: sub, in: path, required: true, schema: { type: string }, description: 用户在 IAM 里的 sub }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  legal_entity_ids:
+                    type: array
+                    items: { type: string }
+    post:
+      summary: 授予某个用户访问一个法人的账（幂等；权限键 erp.finance.manage_access）
+      operationId: grantLegalEntityAccess
+      parameters:
+        - { name: sub, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [legal_entity_id]
+              properties:
+                legal_entity_id: { type: string }
+      responses:
+        "200": { description: OK }
+
+  /legal-entity-access/{sub}/{legal_entity_id}:
+    delete:
+      summary: 撤销某个用户对一个法人的访问（幂等；权限键 erp.finance.manage_access）
+      operationId: revokeLegalEntityAccess
+      parameters:
+        - { name: sub, in: path, required: true, schema: { type: string } }
+        - { name: legal_entity_id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: OK }
+
 components:
   schemas:
     PeriodStatus:
