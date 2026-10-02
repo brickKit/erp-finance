@@ -1,49 +1,26 @@
 #!/usr/bin/env bash
-# 本组件自己的种子数据（总纲 SOP-W-7）：从零设计（AGENTS.md 原文点名
-# "几乎没有专属演示数据"），覆盖 PostManualEntry 各种场景 + 会计期间
-# 关账/反关账/锁定期间三个操作 + legal_entity 维数据权限授权。
+# 本组件的示例数据，两部分：
 #
-# ⚠️ 只做单一法人 'default'（迁移播种数据里唯一存在的法人）——C17 记录
-# 了"两个法人同期间各自首次过账会撞同一个 post_no"这个真实但当前不可
-# 触发的设计缺口（阶段二/三都没有任何路径能创建第二个法人）。种子数据
-# 刻意不去人为制造第二个法人来"顺便复现"C17：那需要绕开真实业务流程
-# 直接插库，产生的第二法人不是这个系统任何真实功能能创建出来的东西，
-# 演示数据没有必要为了触发一个已知记录、当前不可达的缺口而这样做。
+# ① 应收台账样例（只要本组件与 NATS 在跑）：以 erp-sales 事件的形状往 NATS 发 6 条
+#    sales.order.created.v1（order_id 以 seed-fin-order- 开头），由本组件真实的消费者
+#    生成应收凭证、应收台账与已用额度；然后把到期日回填到 0–120 天前，并给一行写一笔
+#    部分核销，让 GET /ar-ledger 的未核销余额与 GET /ar-ledger/summary 的四个账龄桶都有
+#    东西可看。客户优先用 mdm-customer 种子里的 seed-customer-1..3（演示库里有就取它的
+#    id 与名字），没有就用本脚本自己的 seed-fin-cust-1..3；客户名写进本组件的客户摘要
+#    副本时 version 记 0，之后真实的 mdm.customer.* 事件（version ≥ 1）会覆盖它。
+#    核销没有接口（收款流程还不存在），那一笔直接 UPDATE。
 #
-# ⚠️ 实测确认的关键约束：PostManualEntry/ReverseEntry 都不接受调用方
-# 指定 business_date——过账事务内部用 time.Now() 找覆盖"今天"的期间
-# （backend/internal/repo/entry.go），所以本脚本建的凭证全部落在运行
-# 脚本当天所在的会计期间（不是可以自由选期间）。这不是本脚本的限制，
-# 是这个 rpc 契约本身的设计（人工补录的业务日期就是补录的当天）。
+# ② 人工凭证与会计期间（经 REST + 真实 JWT，要求 infra/iam-casdoor 与 infra/authz 都在
+#    项目里、各自的种子已灌）：给 dev.superuser（以及有的话 dev.finance.viewer）授权
+#    default 法人；5 张人工凭证（5 个科目、单行 / 四行、一张被红字冲销）；三个历史期间
+#    演示三态（2026-04 CLOSED→LOCKED、2026-05 CLOSED→OPEN、2026-07 CLOSED）。两者不在
+#    项目里时这一部分整段跳过并说明原因。
 #
-# 因此"时间跨度"这条 SOP-W-7 判据在本组件只能体现在两处：① 凭证的
-# created_at/posted_at 在建完之后小幅回填（同 mdm-customer 的既有判据，
-# finance_journal_entries 头表不分区，直接 UPDATE 安全——分区的是明细
-# 表 finance_journal_entry_lines，且分区键是 period 字符串不是时间戳，
-# 不受影响）；② 会计期间本身横跨 FY2026 全年 12 个月，关/锁几个跟"今天"
-# 无关的历史期间，让期间状态本身有真实的新旧之分（即使当前没有查期间
-# 列表的 rpc，见下方注释）。
+# 幂等：消息按 (subject, aggregate_id, version) 去重、源单唯一约束兜底；REST 调用的幂等键
+# 固定；回填写的是相对"现在"的绝对值。只给本地开发 / 演示用。
 #
-# ⚠️ legal_entity_access 授权模式同 erp-inventory 的 warehouse_access
-# （阶段三 Task 6 定案：分配数据归数据的宿主组件自己维护）——
-# dev.superuser 必须先被授予 'default' 法人访问权限，PostManualEntry/
-# ClosePeriod 等写路径才会放行（allowedLegalEntityIDs 校验，service.go）。
-# 额外把这份访问权限也授予 dev.finance.viewer（infra-authz 种的财务只读
-# 测试身份，角色 dev_finance_viewer，只有 erp.finance.view 一个权限
-# 键）——不然这个"数据权限维度要有真实存在感"的账号登录进来会看到空
-# 列表，跟没授权时的样子分不清。
-#
-# 全程走真实 REST + JWT 调用，不是直接写库；claim-first 幂等（固定
-# idempotency_key），重复跑不会重复过账/重复转换期间状态。
-#
-# ⚠️ 只给本地开发/演示用，不出现在任何部署/CI 流程里。
-#
-# ⚠️ 没有 seed-clean.sh：跟 erp-inventory 同样的理由，而且更彻底——
-# entry_no_seq/post_no 是 BIGSERIAL/期间内计数器，DELETE 不会让它们
-# 回退（总纲 SOP-W-7"delete 不是 reset"判据）；更关键的是 LockPeriod
-# 是**终态**，整个 rpc 契约里没有任何操作能把 LOCKED 转回去——一旦这
-# 个脚本锁过某个期间，"删几行数据"从物理上就不可能把状态复原。想清空
-# 只能 `make db-reset`（migrate down 再 up）。
+# 没有 seed-clean：entry_no 序列与每个期间的 post_no 计数器只增不减，LOCKED 是终态，
+# 逐行 DELETE 回不到干净状态，要清空只能 make db-reset。
 set -euo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ROOT="$(cd "$DIR/../../.." && pwd)"
@@ -51,41 +28,134 @@ source "$ROOT/infra/scripts/lib/seed-net.sh"
 
 need python3; need docker
 
+# 宿主机上的 NATS（make up 起的 be-nats）；本组件容器经 host.docker.internal 连的是同一个。
+SEED_NATS="${SEED_NATS:-localhost:4222}"
+LEGAL_ENTITY="default"
+
+# nats_pub <subject> <aggregate_id> <version> <payload>：照 be-sdk-go 的信封写消息头。
+# 用 NATS 的文本协议直接发（HPUB），不需要另装 nats 命令行。
+nats_pub() {
+  python3 - "$SEED_NATS" "$@" <<'PY'
+import socket, sys
+hostport, subject, agg, ver, payload = sys.argv[1:6]
+host, port = hostport.rsplit(":", 1)
+s = socket.create_connection((host, int(port)), timeout=5)
+f = s.makefile("rb")
+if not f.readline().startswith(b"INFO"):
+    sys.exit("NATS 没有回 INFO")
+hdr = f"NATS/1.0\r\nX-Aggregate-Id: {agg}\r\nX-Version: {ver}\r\nX-Hop-Count: 0\r\n\r\n".encode()
+body = payload.encode()
+s.sendall(b'CONNECT {"verbose":false,"pedantic":false,"headers":true}\r\n')
+s.sendall(f"HPUB {subject} {len(hdr)} {len(hdr) + len(body)}\r\n".encode() + hdr + body + b"\r\nPING\r\n")
+line = f.readline()
+while line.startswith(b"INFO"):
+    line = f.readline()
+if not line.startswith(b"PONG"):
+    sys.exit(f"NATS 没有确认：{line!r}")
+PY
+}
+
+sql1() { psqlx -tA -q -c "$1"; }
+
+echo "── ① 应收台账样例：经 NATS 发 6 条 sales.order.created.v1（$SEED_NATS）──"
+CUST_IDS=(); CUST_NAMES=()
+for i in 1 2 3; do
+  id="$(idfor mdm_customer "seed-customer-$i" 2>/dev/null || true)"
+  if [ -n "$id" ]; then
+    name="$(sql1 "SELECT name FROM mdm_customer.customers WHERE id = '$id'" 2>/dev/null || true)"
+  fi
+  if [ -z "$id" ] || [ -z "${name:-}" ]; then
+    id="seed-fin-cust-$i"; name="「本地测试」财务样例客户 $i"
+  fi
+  CUST_IDS+=("$id"); CUST_NAMES+=("$name")
+  sql1 "INSERT INTO erp_finance.customer_credit_snapshots (customer_id, name, version)
+        VALUES ('$id', \$n\$$name\$n\$, 0) ON CONFLICT (customer_id) DO NOTHING" >/dev/null
+done
+ok "客户：${CUST_IDS[*]}（名字已进客户摘要副本，真实事件来了会覆盖）"
+
+# 订单号 → 客户下标、金额、到期日距今天数（落在四个账龄桶里，含第 31 天这条边界）
+ORDERS=(
+  "1 0 12800.00 0"
+  "2 0 3650.50 20"
+  "3 1 22000.00 31"
+  "4 1 980.25 45"
+  "5 2 15420.00 75"
+  "6 2 7300.00 120"
+)
+for o in "${ORDERS[@]}"; do
+  read -r n c amount _days <<<"$o"
+  oid="seed-fin-order-$n"
+  nats_pub sales.order.created.v1 "$oid" 1 \
+    "{\"order_id\":\"$oid\",\"order_no\":\"SEED-FIN-$n\",\"customer_id\":\"${CUST_IDS[$c]}\",\"items\":[],\"total_amount\":\"$amount\",\"version\":1}"
+done
+
+want=${#ORDERS[@]}
+for _ in $(seq 1 30); do
+  got="$(sql1 "SELECT count(*) FROM erp_finance.ar_ledger a JOIN erp_finance.finance_journal_entries e ON e.id = a.entry_id
+              WHERE e.source_component = 'erp-sales' AND e.source_doc_id LIKE 'seed-fin-order-%'")"
+  [ "$got" -ge "$want" ] && break
+  sleep 1
+done
+[ "$got" -ge "$want" ] || die "等了 30 秒只看到 $got/$want 行应收：本组件的消费者没收到消息？看容器日志"
+ok "应收：$got 行（每张订单一张应收凭证 借 1122 / 贷 6001）"
+
+# 到期日与创建时间回填到 N 天前（created_at 一起挪，列表的默认 90 天窗口里只看得到较新的
+# 几行，统计里全部都在）；订单 4 核销 300.00，未核销余额 680.25。
+for o in "${ORDERS[@]}"; do
+  read -r n _c _amount days <<<"$o"
+  sql1 "UPDATE erp_finance.ar_ledger a SET due_date = current_date - $days, created_at = now() - interval '$days days'
+        FROM erp_finance.finance_journal_entries e
+        WHERE e.id = a.entry_id AND e.source_component = 'erp-sales' AND e.source_doc_id = 'seed-fin-order-$n'" >/dev/null
+done
+sql1 "UPDATE erp_finance.ar_ledger a SET reconciled_amount = 300.00
+      FROM erp_finance.finance_journal_entries e
+      WHERE e.id = a.entry_id AND e.source_component = 'erp-sales' AND e.source_doc_id = 'seed-fin-order-4'" >/dev/null
+ok "到期日回填到 0 / 20 / 31 / 45 / 75 / 120 天前；订单 4 部分核销 300.00"
+echo "   账龄（default 法人，按未核销余额）："
+psqlx -q <<'SQL'
+SELECT round(sum(amount - reconciled_amount) FILTER (WHERE current_date - due_date <= 30), 2)             AS d0_30,
+       round(sum(amount - reconciled_amount) FILTER (WHERE current_date - due_date BETWEEN 31 AND 60), 2) AS d31_60,
+       round(sum(amount - reconciled_amount) FILTER (WHERE current_date - due_date BETWEEN 61 AND 90), 2) AS d61_90,
+       round(sum(amount - reconciled_amount) FILTER (WHERE current_date - due_date > 90), 2)              AS d90_plus
+FROM erp_finance.ar_ledger WHERE legal_entity_id = 'default';
+SQL
+
+echo "── ② 人工凭证与会计期间（REST + 真实 JWT）──"
+if [ -z "$(component_version infra/iam-casdoor)" ] || [ -z "$(component_version infra/authz)" ]; then
+  echo "  跳过：infra/iam-casdoor 与 infra/authz 没有都加入项目，换不到 JWT（加入并灌好它们的种子后重跑本脚本）"
+  exit 0
+fi
+
 seed_net_check
 with_toolbox
 
 FIN_REST="${FIN_REST:-http://$(service_name erp/finance):8087}"
 SEED_USER="dev.superuser"
-LEGAL_ENTITY="default"
 check_healthz "$FIN_REST/healthz" "erp-finance"
 
 wait_bundle_refresh
 
-echo "── 换一个真实 JWT，供调自己的 REST 接口用 ──"
 ACCESS_TOKEN="$(get_app_jwt "$SEED_USER")"
-ok "已换到真实应用 JWT"
+ok "已换到 $SEED_USER 的应用 JWT"
 
 authed() { curl -s -H "Authorization: Bearer $ACCESS_TOKEN" -H "Content-Type: application/json" "$@"; }
 
 SEED_SUB="$(sub_of "$SEED_USER")"
 [ -n "$SEED_SUB" ] || die "Casdoor 里找不到 $SEED_USER"
 
-echo "── 给 dev.superuser 授权 $LEGAL_ENTITY 法人访问权限（幂等）──"
+# 写路径（过账、关账）与读路径都按 legal_entity_access 过滤：不授权，superuser 也什么都
+# 看不到、什么都写不进。
 authed -X POST "$FIN_REST/erp/finance/legal-entity-access/$SEED_SUB" -d "{\"legal_entity_id\":\"$LEGAL_ENTITY\"}" >/dev/null
-ok "legal_entity_access 已就绪（dev.superuser）"
+ok "legal_entity_access：$SEED_USER → $LEGAL_ENTITY"
 
-# ⚠️ 数据权限维度要有真实存在感（总纲 SOP-W-7）：infra-authz 种的财务
-# 只读测试用户（dev.finance.viewer，角色 dev_finance_viewer，只有
-# erp.finance.view 一个权限键）如果没有任何 legal_entity_access，登录
-# 进来会看到空列表，跟"这条数据权限维度根本没生效"分不清。同 erp-inventory
-# 对 dev.warehouse.south 的既有判据：独立查这个用户名的 sub，查不到就
-# 说明 infra-authz 的种子身份还没跑，优雅跳过不中断本脚本其余步骤。
+# dev.finance.viewer 是 infra/authz 种的财务只读身份（只有 erp.finance.view）。不给它法人
+# 授权，它登录进来看到的是空列表，与"数据范围没生效"分不清。没有这个用户就跳过。
 FINANCE_VIEWER_SUB="$(sub_of dev.finance.viewer)"
 if [ -n "$FINANCE_VIEWER_SUB" ]; then
   authed -X POST "$FIN_REST/erp/finance/legal-entity-access/$FINANCE_VIEWER_SUB" -d "{\"legal_entity_id\":\"$LEGAL_ENTITY\"}" >/dev/null
-  ok "legal_entity_access 已就绪（dev.finance.viewer → $LEGAL_ENTITY，只读角色终于有真实数据可看）"
+  ok "legal_entity_access：dev.finance.viewer → $LEGAL_ENTITY"
 else
-  echo "  （没探测到 dev.finance.viewer——不是依赖，只是 infra-authz 的种子身份还没建，跳过）"
+  echo "  （没找到 dev.finance.viewer：infra/authz 的种子身份还没建，跳过）"
 fi
 
 postentry() { # key lines_json memo -> entry id
@@ -104,7 +174,7 @@ periodop() { # key period close|reopen|lock -> status
     | python3 -c 'import json,sys; print(json.load(sys.stdin)["status"])'
 }
 
-echo "── PostManualEntry：5 张人工凭证，覆盖 5 个科目 + 单行/多行 + 待冲销样例 ──"
+# 人工凭证不接受调用方指定业务日期：全部落在今天所在的会计期间。
 E1="$(postentry seed-fin-entry-1 \
   '[{"account_id":"1405","debit":"50000.00"},{"account_id":"2202","credit":"50000.00"}]' \
   "「本地测试」期初库存调整入账")"
@@ -114,57 +184,34 @@ E2="$(postentry seed-fin-entry-2 \
 E3="$(postentry seed-fin-entry-3 \
   '[{"account_id":"1122","debit":"20000.00"},{"account_id":"6001","credit":"20000.00"}]' \
   "「本地测试」手工补录零售收入")"
-# 四行示例：收入确认 + 结转成本合并做一张凭证——比两行的示例更贴近真实
-# 业务场景，也验证了 validateBalanced 是按总借贷合计平衡，不是按行两两
-# 配对（2 借 2 贷，合计各 32000）。
+# 四行：收入确认 + 结转成本合并成一张凭证，借贷按合计平衡（2 借 2 贷，各 32000）。
 E4="$(postentry seed-fin-entry-4 \
   '[{"account_id":"1122","debit":"20000.00"},{"account_id":"6401","debit":"12000.00"},{"account_id":"6001","credit":"20000.00"},{"account_id":"1405","credit":"12000.00"}]' \
   "「本地测试」销售确认凭证（收入+结转成本合并示例，四行）")"
-# 待冲销样例：先过一笔"错"的，再红字冲销掉，验证 ReverseEntry 全链路
-# （原凭证一个字不动，产生一张新的反向凭证）。
+# 先过一笔"错"的，再红字冲销：原凭证一个字不动，产生一张借贷互换的新凭证。
 E5="$(postentry seed-fin-entry-5 \
   '[{"account_id":"1405","debit":"3000.00"},{"account_id":"2202","credit":"3000.00"}]' \
   "「本地测试」误录库存调整（演示冲销）")"
 E5_REVERSAL="$(reverseentry seed-fin-reverse-5 "$E5" "「本地测试」冲销：原凭证记错了金额")"
+ok "凭证：E1=$E1 E2=$E2 E3=$E3 E4=$E4（四行） E5=$E5（已冲销 → $E5_REVERSAL）"
 
-ok "凭证：E1=$E1 E2=$E2 E3=$E3 E4=$E4(四行) E5=$E5(已冲销→$E5_REVERSAL)"
-
-echo "── 会计期间生命周期：挑几个跟"今天"无关的历史期间演示三态流转 ──"
-# ⚠️ 实测踩坑：本来想用 2026-01/02/03 三个月演示，真机一跑发现当时
-# 2026-01=LOCKED、2026-02=CLOSED、2026-06=CLOSED、2026-11=CLOSED——是
-# Task 6 实现期间人工验证 ClosePeriod/LockPeriod 时真实留在 brickkit_db
-# （演示库）里的历史状态（早于本脚本存在，也早于 E3 测试库/演示库分离
-# 这条判据落地），不是本脚本造成的脏数据；`make db-reset` 之后这份历史
-# 状态会被清空，那几个月会变回默认 OPEN。改用 2026-04/05/07 三个月，
-# 不管数据库处在哪种历史状态下都不会跟别的期间操作打架——这是本脚本
-# 自己稳定拥有、可预期起始状态是 OPEN 的三个月。
-#
-# 2026-04：CLOSE 再 LOCK——终态演示（LockPeriod 要求先经过 CLOSED，
-# 不能从 OPEN 直接跳过去，period.go 的 transitionPeriod 状态机）。
-periodop seed-fin-close-2026-04 2026-04 close >/dev/null
-periodop seed-fin-lock-2026-04  2026-04 lock  >/dev/null
-# 2026-05：CLOSE 再 REOPEN——演示"关账是可逆的日常操作"这条设计判据
-# （最终状态又回到 OPEN，但真实走过了一次 close→reopen 的往返）。
+# 期间三态：用三个与"今天"无关的历史月份，起始状态都是 OPEN（别的月份不碰）。
+# 2026-04 关账再锁定（LOCKED 是终态，必须先 CLOSED）；2026-05 关账再反关账（关账可逆）；
+# 2026-07 只关账（已关账、还能反关账的中间态）。
+periodop seed-fin-close-2026-04  2026-04 close  >/dev/null
+periodop seed-fin-lock-2026-04   2026-04 lock   >/dev/null
 periodop seed-fin-close-2026-05  2026-05 close  >/dev/null
 periodop seed-fin-reopen-2026-05 2026-05 reopen >/dev/null
-# 2026-07：只 CLOSE，不 LOCK——留一个"已关账但还能反关账"的中间态样例。
-periodop seed-fin-close-2026-07 2026-07 close >/dev/null
-ok "期间状态（本脚本操作过的月份）：2026-04=LOCKED 2026-05=OPEN（曾 close→reopen） 2026-07=CLOSED；其余月份维持当前实际状态（默认 OPEN，除非之前有别的操作动过）"
+periodop seed-fin-close-2026-07  2026-07 close  >/dev/null
+ok "期间：2026-04=LOCKED 2026-05=OPEN（走过一次 close→reopen） 2026-07=CLOSED"
 
-# ── 时间跨度回填：所有凭证都发生在"今天"所在的会计期间（PostManualEntry
-# 不接受调用方指定 business_date，见脚本顶部注释），直接给前 3 张凭证的
-# created_at/posted_at 回填到本月更早几天，列表默认按时间排序时不是
-# 全部凭证都挤在同一秒。finance_journal_entries 头表不分区，安全；
-# 不碰 period 字段本身，不影响 finance_journal_entry_lines 的分区归属。
-#
-# ⚠️ 用 `now() - interval` 写绝对值，不是 `created_at - interval`——
-# 后者每重跑一次脚本就会在上一次已经回填过的值基础上再减一次，越跑
-# 越早，不是幂等（同 mdm-customer/mdm-product 已验证过的既有判据：
-# 目标值必须是相对"运行脚本这一刻"算出来的绝对值，不能相对列的当前值）。
+# 给前 3 张凭证的 created_at / posted_at 回填到几天前，列表不全挤在同一秒。凭证头不分区，
+# 改它安全；不碰 period，分录明细的分区归属不变。用 now() - interval 写绝对值，重跑不会
+# 越跑越早。
 psqlx -q <<SQL
 SET search_path TO erp_finance;
 UPDATE finance_journal_entries SET created_at = now() - interval '8 days', posted_at = now() - interval '8 days' WHERE id = $E1;
 UPDATE finance_journal_entries SET created_at = now() - interval '5 days', posted_at = now() - interval '5 days' WHERE id = $E2;
 UPDATE finance_journal_entries SET created_at = now() - interval '2 days', posted_at = now() - interval '2 days' WHERE id = $E3;
 SQL
-ok "已给 3 张凭证回填历史 created_at/posted_at（当月内提前 2-8 天）"
+ok "已给 3 张凭证回填 created_at / posted_at（2–8 天前）"
