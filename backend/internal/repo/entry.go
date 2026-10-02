@@ -202,7 +202,19 @@ func publishVoucherPosted(tx *sql.Tx, entryID, entryNo, postNo, period, amount s
 	if err != nil {
 		return err
 	}
-	return besdk.PublishOutbox(tx, "erp_finance", besdk.Event{
+	return publish(tx, besdk.Event{
 		Subject: "finance.voucher.posted.v1", AggregateID: entryID, Version: 1, Payload: payload,
 	})
+}
+
+// publish 把事件写进当前事务所在 schema 的 event_outbox——Outbox 推送线程只读那一张。
+// besdk.WithTx 与 besdk.Consume 都已经 SET LOCAL search_path 到本组件的 schema
+// （PG_SCHEMA），所以 current_schema() 就是它；不写死 erp_finance，PG_SCHEMA 配成别的
+// 名字时事件照样发得出去。
+func publish(tx *sql.Tx, ev besdk.Event) error {
+	var schema string
+	if err := tx.QueryRow(`SELECT current_schema()`).Scan(&schema); err != nil {
+		return fmt.Errorf("查当前 schema: %w", err)
+	}
+	return besdk.PublishOutbox(tx, schema, ev)
 }

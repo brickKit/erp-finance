@@ -142,7 +142,7 @@ func publishCreditRejected(tx *sql.Tx, customerID, orderID, exposure, limit stri
 	if err != nil {
 		return err
 	}
-	return besdk.PublishOutbox(tx, "erp_finance", besdk.Event{
+	return publish(tx, besdk.Event{
 		Subject: "finance.credit.rejected.v1", AggregateID: orderID, Version: 1, Payload: payload,
 	})
 }
