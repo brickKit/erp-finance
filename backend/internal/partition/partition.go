@@ -27,7 +27,7 @@ var weeklyPartitionedTables = []string{"event_outbox", "event_inbox"}
 // 循环退出（下一轮还有机会补上）；返回 error 会让外壳把这个成员的后台循环停掉。
 func Start(ctx context.Context, db *sql.DB, role, schema string, logger *slog.Logger) error {
 	if err := ensureAllWeekly(ctx, db, role, schema); err != nil {
-		logger.Error("周分区维护失败", "error", err)
+		logIfNotShutdown(ctx, logger, err)
 	}
 
 	ticker := time.NewTicker(checkInterval)
@@ -38,10 +38,18 @@ func Start(ctx context.Context, db *sql.DB, role, schema string, logger *slog.Lo
 			return nil
 		case <-ticker.C:
 			if err := ensureAllWeekly(ctx, db, role, schema); err != nil {
-				logger.Error("周分区维护失败", "error", err)
+				logIfNotShutdown(ctx, logger, err)
 			}
 		}
 	}
+}
+
+// logIfNotShutdown：关停时 ctx 被取消，这一轮跟着失败不是错误，不记（R51）。
+func logIfNotShutdown(ctx context.Context, logger *slog.Logger, err error) {
+	if ctx.Err() != nil {
+		return
+	}
+	logger.Error("周分区维护失败", "error", err)
 }
 
 func ensureAllWeekly(ctx context.Context, db *sql.DB, role, schema string) error {

@@ -11,6 +11,9 @@ import (
 	"time"
 
 	besdk "github.com/brickKit/be-sdk-go"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	"github.com/brickKit/erp-finance/v2/backend/internal/repo"
 )
 
@@ -33,6 +36,18 @@ func New(r *repo.Repo, logger *slog.Logger) *Service {
 func (s *Service) allowedLegalEntityIDs(ctx context.Context) ([]string, error) {
 	sub := besdk.ScopeOf(ctx).Owner
 	return s.repo.LegalEntityIDsFor(ctx, sub)
+}
+
+// logFailure 记写命令的失败。映射成调用方状态（4xx）的错误——没有授权、借贷不平、
+// 期间不开放、重复冲销——只记 Info；只有 Internal / Unknown 才是要运维处理的 ERROR（R51）。
+func (s *Service) logFailure(msg string, err error, attrs ...any) {
+	attrs = append(attrs, "error", err)
+	switch status.Code(ToStatus(err)) {
+	case codes.Internal, codes.Unknown:
+		s.logger.Error(msg, attrs...)
+	default:
+		s.logger.Info(msg, attrs...)
+	}
 }
 
 // ── 会计期间 ──
@@ -65,7 +80,7 @@ func (s *Service) ClosePeriod(ctx context.Context, in repo.PeriodOpInput) (strin
 	in.AllowedLegalEntityIDs = allowed
 	status, err := s.repo.ClosePeriod(ctx, in)
 	if err != nil {
-		s.logger.Error("关账失败", "period", in.Period, "legal_entity_id", in.LegalEntityID, "error", err)
+		s.logFailure("关账失败", err, "period", in.Period, "legal_entity_id", in.LegalEntityID)
 		return "", err
 	}
 	return status, nil
@@ -82,7 +97,7 @@ func (s *Service) ReopenPeriod(ctx context.Context, in repo.PeriodOpInput) (stri
 	in.AllowedLegalEntityIDs = allowed
 	status, err := s.repo.ReopenPeriod(ctx, in)
 	if err != nil {
-		s.logger.Error("反关账失败", "period", in.Period, "legal_entity_id", in.LegalEntityID, "error", err)
+		s.logFailure("反关账失败", err, "period", in.Period, "legal_entity_id", in.LegalEntityID)
 		return "", err
 	}
 	return status, nil
@@ -99,7 +114,7 @@ func (s *Service) LockPeriod(ctx context.Context, in repo.PeriodOpInput) (string
 	in.AllowedLegalEntityIDs = allowed
 	status, err := s.repo.LockPeriod(ctx, in)
 	if err != nil {
-		s.logger.Error("锁定期间失败", "period", in.Period, "legal_entity_id", in.LegalEntityID, "error", err)
+		s.logFailure("锁定期间失败", err, "period", in.Period, "legal_entity_id", in.LegalEntityID)
 		return "", err
 	}
 	return status, nil
@@ -146,7 +161,7 @@ func (s *Service) PostManualEntry(ctx context.Context, in repo.PostManualEntryIn
 	in.AllowedLegalEntityIDs = allowed
 	entry, err := s.repo.PostManualEntry(ctx, in)
 	if err != nil {
-		s.logger.Error("手工过账失败", "legal_entity_id", in.LegalEntityID, "error", err)
+		s.logFailure("手工过账失败", err, "legal_entity_id", in.LegalEntityID)
 		return nil, err
 	}
 	return entry, nil
@@ -166,7 +181,7 @@ func (s *Service) ReverseEntry(ctx context.Context, in repo.ReverseEntryInput) (
 	in.AllowedLegalEntityIDs = allowed
 	entry, err := s.repo.ReverseEntry(ctx, in)
 	if err != nil {
-		s.logger.Error("红字冲销失败", "entry_id", in.EntryID, "error", err)
+		s.logFailure("红字冲销失败", err, "entry_id", in.EntryID)
 		return nil, err
 	}
 	return entry, nil
