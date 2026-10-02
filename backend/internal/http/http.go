@@ -6,8 +6,10 @@ package http
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -170,12 +172,38 @@ func reverseEntryHandler(svc *service.Service) gin.HandlerFunc {
 	}
 }
 
+// parseWindow 读列表的 created_after / created_before（RFC 3339）。不传就由
+// repo 补默认的最近 90 天窗口；格式不对返回错误（handler 回 400），不悄悄忽略。
+func parseWindow(c *gin.Context) (after, before time.Time, err error) {
+	for _, p := range []struct {
+		name string
+		dst  *time.Time
+	}{{"created_after", &after}, {"created_before", &before}} {
+		raw := c.Query(p.name)
+		if raw == "" {
+			continue
+		}
+		t, perr := time.Parse(time.RFC3339, raw)
+		if perr != nil {
+			return after, before, fmt.Errorf("%s 不是 RFC 3339 时间：%q", p.name, raw)
+		}
+		*p.dst = t
+	}
+	return after, before, nil
+}
+
 func listEntriesHandler(svc *service.Service) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		after, before, err := parseWindow(c)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
 		pageSize, _ := strconv.Atoi(c.Query("page_size"))
 		out, err := svc.ListEntries(c.Request.Context(), repo.ListInput{
 			Cursor: c.Query("cursor"), PageSize: pageSize,
 			Period: c.Query("period"), StatusFilter: c.Query("status_filter"),
+			CreatedAfter: after, CreatedBefore: before,
 		})
 		if err != nil {
 			_ = c.Error(service.ToStatus(err))
@@ -191,9 +219,15 @@ func listEntriesHandler(svc *service.Service) gin.HandlerFunc {
 
 func listARLedgerHandler(svc *service.Service) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		after, before, err := parseWindow(c)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
 		pageSize, _ := strconv.Atoi(c.Query("page_size"))
 		out, err := svc.ListARLedger(c.Request.Context(), repo.ListARLedgerInput{
 			Cursor: c.Query("cursor"), PageSize: pageSize, CustomerID: c.Query("customer_id"),
+			CreatedAfter: after, CreatedBefore: before,
 		})
 		if err != nil {
 			_ = c.Error(service.ToStatus(err))
