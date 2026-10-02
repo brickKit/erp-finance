@@ -78,7 +78,7 @@ REST under `/erp/finance`, every route behind a key and filtered by the caller's
 
 **Receivables for the frontend.**
 
-- `customer_name` is read at query time from the customer summary copy (`LEFT JOIN`; empty until the customer's first event arrives). Copying it into each receivable at posting time was the alternative; the sales-order event carries no name, so it would come from the same copy anyway, and reading at query time follows renames.
+- `customer_name` is read at query time from the customer summary copy (`LEFT JOIN`; empty until the customer's first event arrives, and for customers carried over from 1.x, whose copy predates the `name` column, until their next `mdm.customer.updated.v1`). Copying it into each receivable at posting time was the alternative; the sales-order event carries no name, so it would come from the same copy anyway, and reading at query time follows renames.
 - `outstanding` = `amount − reconciled_amount`, computed in SQL.
 - `due_date` is set when the receivable is written. Upstream events carry no payment terms, so it is the posting date (due on receipt); when sales adds terms to its event (an additive field), finance can use them.
 - `GET /ar-ledger/summary` returns `total_receivable`, `total_reconciled`, `outstanding` and the outstanding amount by days past due — `as_of` (today, UTC) minus `due_date`: `d0_30` (including not yet due), `d31_60`, `d61_90`, `d90_plus`; day 30 is in the first bucket, day 31 in the second. It ignores the default 90-day list window: it is a statement of everything open, and the oldest bucket is the one that matters. All values are decimal strings with two decimals (`"0.00"` when empty).
