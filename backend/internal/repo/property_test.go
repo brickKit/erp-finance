@@ -19,11 +19,9 @@ func centsToDecimal(cents int64) string {
 	return fmt.Sprintf("%d.%02d", cents/100, cents%100)
 }
 
-// TestProperty_借贷不平衡的分录被拒绝且不落库 是 04-testing-standard.md §3.2
-// 对"核心交易类组件"（资金）的强制要求：复式记账"借贷必须相等"是这个
-// 组件唯一、也是最重要的不变式，此前只有例子测试
-// （TestPostManualEntry_借贷不平衡时拒绝且不落库，一组固定金额）验证过，
-// 从没有随机金额/随机行数/随机科目组合攻击过这条判据。
+// TestProperty_借贷不平衡的分录被拒绝且不落库：复式记账"借贷必须相等"是这个
+// 组件最重要的不变式，核心交易组件的这类规则要用属性测试（随机金额、随机行数、
+// 随机科目组合）攻击，一组固定金额的例子测试不够。
 //
 // 构造方式：先拼出 N 组"同金额一借一贷"的配对行（天然平衡），
 // balanced=false 时再单独追加一笔不成对的借方行去打破平衡——差额
@@ -100,11 +98,9 @@ func TestProperty_借贷不平衡的分录被拒绝且不落库(t *testing.T) {
 	})
 }
 
-// TestProperty_PostManualEntry并发同key仅执行一次 补的是
-// 04-testing-standard.md §3.2 明确要求、此前项目里从没写过的那一半幂等性
-// 测试："多个并发请求带着同一个 idempotency_key 同时到达"，而不是
-// "串行重放同一个 key 两次"（已有的 TestPostManualEntry_幂等 只验证了
-// 串行重放）。随机出并发数与一组固定平衡分录，重复攻击
+// TestProperty_PostManualEntry并发同key仅执行一次 测的是幂等的另一半："多个并发
+// 请求带着同一个 idempotency_key 同时到达"，而不是"串行重放同一个 key 两次"
+// （TestPostManualEntry_幂等 只验证串行重放）。随机出并发数与一组固定平衡分录，重复攻击
 // claimIdempotency 的 `INSERT ... ON CONFLICT DO NOTHING` 判据——只要有
 // 一次并发窗口没锁住，postNo 序列就会多分配出一个、`finance_journal_entries`
 // 就会多出一行。

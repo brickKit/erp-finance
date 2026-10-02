@@ -14,19 +14,10 @@ import (
 // 还是会通过），"只有 default 权限时看不到别的法人凭证"这条真正的排除
 // 场景此前完全没有数据能验证。
 //
-// 种子数据只有一个法人 "default"（defaultLegalEntities 注释），阶段二
-// 没有 production 代码路径能建新法人（没有 OpenPeriod/CreatePeriod 这类
-// rpc），这里用测试专属的建期间/建凭证小工具直接插两张表，不经过
-// PostManualEntry——⚠️ 这个决定不是偷懒，是真的试过 PostManualEntry
-// 才发现的：post_no 的格式是 `P-<period>-<seq>`（nextPostNo），不含
-// legal_entity_id，但 last_post_seq 计数器却是按 (period,
-// legal_entity_id) 各自独立的一行——这意味着两个法人在同一个 period
-// 各自第一次过账都会生成 `P-2026-09-000001`，撞上全局唯一索引
-// finance_journal_entries_post_no_uniq。这是一个真实存在、但阶段二"只
-// 有一个法人"这个前提下永远不会触发的设计缺口（post_no 该不该带
-// legal_entity_id 是个需要回到设计文档定的问题，这里不擅自改产品
-// 代码），记入踩坑记录 C17，测试改成直接插行绕开它——本测试只关心
-// ListEntries 的过滤 SQL 对不对，不需要真的走一遍过账的业务规则。
+// 迁移只建了一个法人 "default"，也没有建期间的 rpc，这里用测试专属的小工具直接
+// 插一个期间与一张凭证头（不建分录行），不经过 PostManualEntry：本测试只关心
+// ListEntries 的过滤 SQL，不需要走一遍过账规则。需要真实过账的多法人测试用
+// legal_entity_test.go 的 newLegalEntity。
 func seedPeriodForLegalEntity(t *testing.T, ctx context.Context, r *Repo, legalEntityID string) {
 	t.Helper()
 	// 复用 default 法人 2026-09 那个期间的 fiscal_year_id/日期范围（要

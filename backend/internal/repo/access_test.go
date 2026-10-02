@@ -1,5 +1,5 @@
-// 阶段三 Task 6：legal_entity_access 分配表 + 数据范围过滤真实生效——
-// 对应 004_create_legal_entity_access.up.sql 顶部注释。
+// legal_entity_access 分配表与 legal_entity 维数据范围过滤（对应
+// 004_create_legal_entity_access.up.sql）。
 package repo
 
 import (
@@ -165,11 +165,9 @@ func TestGetEntry_没有授权时ErrForbidden(t *testing.T) {
 
 // TestListEntries_授权范围下推进SQL过滤 是 List 端点数据范围过滤的核心
 // 断言：授权范围必须下推进 SQL 的 WHERE，不能查出全部结果后在 Go 里
-// 再过滤（决策 53 的既有判据）。⚠️ 阶段二只有一个真实法人 'default'
-// （没有独立的法人主数据表，见 004 迁移顶部注释）——不另造一个假法人
-// 去建凭证（那会先在 lockOpenPeriodForDate 上失败，因为它没有
-// accounting_periods 行），用"授权 default"与"不授权任何法人"两种
-// 输入对照同一批真实数据，同样能验证过滤方向。
+// 再过滤。这里用"授权 default"与"不授权任何法人"两种输入对照同一批数据；
+// "看不到另一个真实存在的法人的数据"由 list_second_entity_test.go 与
+// legal_entity_test.go 里带第二个法人的测试覆盖。
 func TestListEntries_授权范围下推进SQL过滤(t *testing.T) {
 	db := testDB(t)
 	ctx := context.Background()

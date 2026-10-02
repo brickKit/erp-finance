@@ -12,7 +12,7 @@ import (
 	"time"
 
 	besdk "github.com/brickKit/be-sdk-go"
-	_ "github.com/jackc/pgx/v5/stdlib" // §12.4：不用 lib/pq，驱动名注册为 "pgx"
+	_ "github.com/jackc/pgx/v5/stdlib" // 锁定栈用 pgx 不用 lib/pq，驱动名注册为 "pgx"
 )
 
 // defaultLegalEntities 是本文件测试统一使用的授权列表——种子数据只有
@@ -235,8 +235,8 @@ func TestPostEntryTx_业务日期超出所有已建期间时报NotFound(t *testi
 	}
 }
 
-// TestPostEntryTx_关闭的期间顺延到下一个开放期间 是设计计划 §3.1"迟到的
-// 凭证记进下一个开放期间，不是拒绝"的直接测试。用 2026-06（本测试专用，
+// TestPostEntryTx_关闭的期间顺延到下一个开放期间 直接测"迟到的凭证记进下一个
+// 开放期间，不是拒绝"。用 2026-06（本测试专用，
 // 不与其他测试共享）：关掉它，业务日期落在 6 月的凭证应该顺延进 7 月
 // （下一个 OPEN 的期间），而不是报错。
 func TestPostEntryTx_关闭的期间顺延到下一个开放期间(t *testing.T) {
@@ -336,9 +336,8 @@ func TestReverseEntry_原凭证不变且冲销凭证借贷互换(t *testing.T) {
 }
 
 func TestReverseEntry_对草稿凭证报错(t *testing.T) {
-	// 阶段二 PostManualEntry 直接过账，没有真正的 DRAFT 态凭证留在库里
-	// 可以拿来测——这条测试改成验证对不存在的 entry_id 报 ErrNotFound，
-	// 覆盖 ReverseEntry 的另一半校验路径。
+	// PostManualEntry 直接过账，库里没有 DRAFT 态凭证可以拿来测——这条测试验证
+	// 对不存在的 entry_id 报 ErrNotFound，覆盖 ReverseEntry 的另一半校验路径。
 	db := testDB(t)
 	ctx := context.Background()
 	r := New(db, "erp_finance_rw", "erp_finance")
@@ -547,8 +546,8 @@ func TestPostInventoryAdjustedEntry_qtyDelta为0时不生成凭证(t *testing.T)
 	}
 }
 
-// TestPostManualEntry_并发过账post_no连续无缺口 是 post_no 生成机制
-// （设计计划 §9 第 7 条）的并发正确性测试：N 个并发的手工凭证都过账到
+// TestPostManualEntry_并发过账post_no连续无缺口 是 post_no 生成机制的并发正确性
+// 测试：N 个并发的手工凭证都过账到
 // 同一个期间，post_no 必须两两不同、且是连续的整数序列（1..N），
 // 不许有缺口也不许重复——这正是"锁期间行"要保证的东西。
 func TestPostManualEntry_并发过账postNo连续无缺口(t *testing.T) {

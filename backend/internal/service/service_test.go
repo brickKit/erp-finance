@@ -37,9 +37,8 @@ func newTestService(t *testing.T) (*Service, *repo.Repo) {
 	return New(r, slog.Default()), r
 }
 
-// authedCtx 造一个"已经过 RequirePermission 验签"的 ctx
-// （besdk.ContextWithClaims，阶段三 Task 6 在 erp-inventory 发现的真实
-// 缺口，见 be-sdk-go authz.go 同名函数注释），并真的把 sub 授权到
+// authedCtx 造一个"已经过 RequirePermission 验签"的 ctx（besdk.ContextWithClaims），
+// 并真的把 sub 授权到
 // legalEntityIDs——service 层调用 PostManualEntry 等方法时会真的查
 // legal_entity_access 表，只造一份假 Claims 不授权访问，一样会被
 // ErrForbidden 拦下来。

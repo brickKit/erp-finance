@@ -42,10 +42,9 @@ func natsURLForTest(t *testing.T) string {
 // testSubject 给消费者测试造一个测试私有的 subject，不直接用生产真实
 // subject。
 //
-// ⚠️ 实测踩坑（docs/dev/field-tested-pitfalls-log.md 类别 E 的 E2）：这几条
-// 测试原来直接订阅/发布到真实 subject（如 "sales.order.created.v1"），
-// 而同一台机器上 `brickkit up` 真实跑着的 erp-finance 容器订阅的是
-// **同一个** subject——NATS 核心发布订阅对同一 subject 的多个订阅者是
+// 直接订阅 / 发布真实 subject（如 "sales.order.created.v1"）不行：同一台机器上
+// `brickkit up` 起着的 erp-finance 容器订阅的是同一个 subject——NATS 核心发布订阅
+// 对同一 subject 的多个订阅者是
 // 广播，两边都会收到测试发布的消息，谁先把 event_inbox 那一行 INSERT
 // 成功谁就真正执行 handler，断言读到的可能是真实容器的产出，不是本地
 // 被测代码的产出。
