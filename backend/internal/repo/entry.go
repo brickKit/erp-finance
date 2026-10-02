@@ -295,7 +295,7 @@ func (r *Repo) ReverseEntry(ctx context.Context, in ReverseEntryInput) (*Entry, 
 			return err
 		}
 
-		original, err := getEntryTx(ctx, tx, in.EntryID)
+		original, err := getEntryForReversalTx(ctx, tx, in.EntryID)
 		if err != nil {
 			return err
 		}
@@ -304,6 +304,9 @@ func (r *Repo) ReverseEntry(ctx context.Context, in ReverseEntryInput) (*Entry, 
 		}
 		if original.Status != EntryPosted {
 			return fmt.Errorf("%w: entry_id=%s", ErrEntryNotPosted, in.EntryID)
+		}
+		if err := ensureNotReversedTx(ctx, tx, original.ID); err != nil {
+			return err
 		}
 
 		reversedLines := make([]Line, len(original.Lines))
@@ -325,6 +328,33 @@ func (r *Repo) ReverseEntry(ctx context.Context, in ReverseEntryInput) (*Entry, 
 		return nil, err
 	}
 	return entry, nil
+}
+
+// getEntryForReversalTx 锁住要被冲销的那张凭证头再读出来：同一张凭证的并发冲销在
+// 这里排队，后到的那个能看见先到的已经写下的冲销凭证（ensureNotReversedTx）。
+func getEntryForReversalTx(ctx context.Context, tx *sql.Tx, id string) (*Entry, error) {
+	entryID, err := parseID("id", id)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := tx.ExecContext(ctx, `SELECT 1 FROM finance_journal_entries WHERE id = $1 FOR UPDATE`, entryID); err != nil {
+		return nil, fmt.Errorf("锁 finance_journal_entries: %w", err)
+	}
+	return getEntryTx(ctx, tx, id)
+}
+
+// ensureNotReversedTx：一张凭证只能红字冲销一次，再冲一次账上就多冲了一笔。
+func ensureNotReversedTx(ctx context.Context, tx *sql.Tx, entryID string) error {
+	var reversed bool
+	if err := tx.QueryRowContext(ctx, `
+		SELECT EXISTS (SELECT 1 FROM finance_journal_entries
+		               WHERE source_doc_type = 'reversal' AND source_doc_id = $1)`, entryID).Scan(&reversed); err != nil {
+		return fmt.Errorf("查冲销凭证: %w", err)
+	}
+	if reversed {
+		return fmt.Errorf("%w: entry_id=%s", ErrEntryAlreadyReversed, entryID)
+	}
+	return nil
 }
 
 func getEntryTx(ctx context.Context, tx *sql.Tx, id string) (*Entry, error) {

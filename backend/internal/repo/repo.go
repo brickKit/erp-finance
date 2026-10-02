@@ -29,6 +29,9 @@ var ErrUnbalancedEntry = errors.New("凭证借贷不平衡")
 // （如 ReverseEntry）。
 var ErrEntryNotPosted = errors.New("凭证尚未过账")
 
+// ErrEntryAlreadyReversed：这张凭证已经被红字冲销过，不能再冲一次。
+var ErrEntryAlreadyReversed = errors.New("凭证已被冲销")
+
 // ErrForbidden：调用者对某个具体法人没有 legal_entity_access 授权
 // （阶段三 Task 6，§14.2.2 的 legal_entity 维）。⚠️ 同 erp-inventory 的
 // ErrForbidden：这个法人是真实存在的，调用者只是看不见，与 ErrNotFound

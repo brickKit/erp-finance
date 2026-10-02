@@ -19,7 +19,7 @@ func ToStatus(err error) error {
 		return status.Error(codes.FailedPrecondition, err.Error())
 	case errors.Is(err, repo.ErrUnbalancedEntry):
 		return status.Error(codes.FailedPrecondition, err.Error())
-	case errors.Is(err, repo.ErrEntryNotPosted):
+	case errors.Is(err, repo.ErrEntryNotPosted), errors.Is(err, repo.ErrEntryAlreadyReversed):
 		return status.Error(codes.FailedPrecondition, err.Error())
 	case errors.Is(err, repo.ErrNotFound):
 		return status.Error(codes.NotFound, err.Error())
