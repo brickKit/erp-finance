@@ -39,6 +39,7 @@ func RegisterRoutes(eng *gin.Engine, svc *service.Service) {
 	besdk.GET(g, "/entries/:id", "erp.finance.view", getEntryHandler(svc))
 	besdk.POST(g, "/entries/:id/reverse", "erp.finance.post", reverseEntryHandler(svc))
 	besdk.GET(g, "/ar-ledger", "erp.finance.view", listARLedgerHandler(svc))
+	besdk.GET(g, "/ar-ledger/summary", "erp.finance.view", arLedgerSummaryHandler(svc))
 	besdk.GET(g, "/legal-entity-access/:sub", "erp.finance.manage_access", listLegalEntityAccessHandler(svc))
 	besdk.POST(g, "/legal-entity-access/:sub", "erp.finance.manage_access", grantLegalEntityAccessHandler(svc))
 	besdk.DELETE(g, "/legal-entity-access/:sub/:legal_entity_id", "erp.finance.manage_access", revokeLegalEntityAccessHandler(svc))
@@ -243,6 +244,26 @@ func listARLedgerHandler(svc *service.Service) gin.HandlerFunc {
 			})
 		}
 		c.JSON(http.StatusOK, gin.H{"entries": dtos, "next_cursor": out.NextCursor})
+	}
+}
+
+func arLedgerSummaryHandler(svc *service.Service) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		sum, err := svc.SummarizeARLedger(c.Request.Context(), c.Query("customer_id"))
+		if err != nil {
+			_ = c.Error(service.ToStatus(err))
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"as_of":            sum.AsOf,
+			"total_receivable": sum.TotalReceivable,
+			"total_reconciled": sum.TotalReconciled,
+			"outstanding":      sum.Outstanding,
+			"aging": gin.H{
+				"d0_30": sum.Aging.D0To30, "d31_60": sum.Aging.D31To60,
+				"d61_90": sum.Aging.D61To90, "d90_plus": sum.Aging.D90Plus,
+			},
+		})
 	}
 }
 

@@ -125,3 +125,62 @@ func (r *Repo) ListARLedger(ctx context.Context, in ListARLedgerInput) (*ListARL
 	}
 	return &out, nil
 }
+
+// ARSummaryInput 是应收统计的入参。AsOf 是统计当天（账龄从到期日算到这一天），
+// service 层传今天（UTC），测试传固定日期。
+type ARSummaryInput struct {
+	CustomerID string
+	AsOf       time.Time
+	// AllowedLegalEntityIDs 见 period.go 的 PeriodOpInput 同名字段注释。
+	AllowedLegalEntityIDs []string
+}
+
+// ARAging 是未核销余额的账龄分桶，按天数 = 统计当天 − 到期日。
+type ARAging struct {
+	D0To30  string
+	D31To60 string
+	D61To90 string
+	D90Plus string
+}
+
+type ARSummary struct {
+	AsOf            string // 统计当天，YYYY-MM-DD
+	TotalReceivable string
+	TotalReconciled string
+	Outstanding     string
+	Aging           ARAging
+}
+
+// SummarizeARLedger 汇总调用者有权看到的应收：合计、已核销、未核销，以及未核销余额
+// 的账龄分桶（≤30 天含未到期、31–60、61–90、>90）。全部在 SQL 里按 NUMERIC 求和，
+// round(…, 2) 保证结果恰好两位小数（没有数据时是 "0.00"）。
+//
+// 不套列表的默认 90 天窗口：这是对全部未结清应收的统计，超过 90 天的正是最要看的那一桶。
+// 数据范围与列表相同：legal_entity_id 必须在授权列表里，空列表什么都匹配不到。
+func (r *Repo) SummarizeARLedger(ctx context.Context, in ARSummaryInput) (*ARSummary, error) {
+	asOf := in.AsOf.UTC().Format("2006-01-02")
+	query := `
+		SELECT round(COALESCE(sum(amount), 0), 2)::text,
+		       round(COALESCE(sum(reconciled_amount), 0), 2)::text,
+		       round(COALESCE(sum(amount - reconciled_amount), 0), 2)::text,
+		       round(COALESCE(sum(amount - reconciled_amount) FILTER (WHERE $1::date - due_date <= 30), 0), 2)::text,
+		       round(COALESCE(sum(amount - reconciled_amount) FILTER (WHERE $1::date - due_date BETWEEN 31 AND 60), 0), 2)::text,
+		       round(COALESCE(sum(amount - reconciled_amount) FILTER (WHERE $1::date - due_date BETWEEN 61 AND 90), 0), 2)::text,
+		       round(COALESCE(sum(amount - reconciled_amount) FILTER (WHERE $1::date - due_date > 90), 0), 2)::text
+		FROM ar_ledger WHERE legal_entity_id = ANY($2::text[])`
+	args := []any{asOf, in.AllowedLegalEntityIDs}
+	if in.CustomerID != "" {
+		args = append(args, in.CustomerID)
+		query += fmt.Sprintf(" AND customer_id = $%d", len(args))
+	}
+	out := ARSummary{AsOf: asOf}
+	err := besdk.WithTx(ctx, r.db, r.role, r.schema, func(tx *sql.Tx) error {
+		return tx.QueryRowContext(ctx, query, args...).Scan(
+			&out.TotalReceivable, &out.TotalReconciled, &out.Outstanding,
+			&out.Aging.D0To30, &out.Aging.D31To60, &out.Aging.D61To90, &out.Aging.D90Plus)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("汇总 ar_ledger: %w", err)
+	}
+	return &out, nil
+}

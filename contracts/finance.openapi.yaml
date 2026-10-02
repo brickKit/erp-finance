@@ -206,6 +206,26 @@ paths:
                     items: { $ref: "#/components/schemas/ARLedgerEntry" }
                   next_cursor: { type: string }
 
+  /ar-ledger/summary:
+    get:
+      summary: 应收统计（仪表盘）：合计、已核销、未核销与账龄分桶
+      description: |
+        只统计调用者有法人访问授权（legal_entity_access）的应收。不套列表的默认时间窗口：
+        这是对全部应收的统计。账龄 = 统计当天（as_of，UTC）− 到期日（天），按未核销余额
+        分桶；还没到期的算在 d0_30。权限键 erp.finance.view。
+      operationId: summarizeARLedger
+      parameters:
+        - name: customer_id
+          in: query
+          schema: { type: string }
+          description: 只统计这个客户
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ARLedgerSummary" }
+
 components:
   schemas:
     PeriodStatus:
@@ -306,3 +326,20 @@ components:
           type: string
           format: date
           description: 到期日（YYYY-MM-DD），账龄从它算起；上游不带付款条件时等于记账当天
+
+    ARLedgerSummary:
+      type: object
+      description: 金额一律是恰好两位小数的十进制字符串；没有数据时是 "0.00"
+      properties:
+        as_of: { type: string, format: date, description: 统计当天（UTC） }
+        total_receivable: { type: string, description: 应收合计（sum amount） }
+        total_reconciled: { type: string, description: 已核销合计（sum reconciled_amount） }
+        outstanding: { type: string, description: 未核销合计 = total_receivable - total_reconciled }
+        aging:
+          type: object
+          description: 未核销余额按账龄（天）分桶，四桶之和等于 outstanding
+          properties:
+            d0_30: { type: string, description: 0–30 天，含未到期 }
+            d31_60: { type: string }
+            d61_90: { type: string }
+            d90_plus: { type: string, description: 超过 90 天 }

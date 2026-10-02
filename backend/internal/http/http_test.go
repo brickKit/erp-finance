@@ -73,6 +73,7 @@ func get(t *testing.T, r *repo.Repo, sub, path string, query url.Values) (int, m
 	g := eng.Group("/erp/finance")
 	g.GET("/entries", listEntriesHandler(svc))
 	g.GET("/ar-ledger", listARLedgerHandler(svc))
+	g.GET("/ar-ledger/summary", arLedgerSummaryHandler(svc))
 	w := httptest.NewRecorder()
 	eng.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/erp/finance"+path+"?"+query.Encode(), nil))
 	var body map[string]any
@@ -229,5 +230,32 @@ func TestListARLedger_REST返回客户名未核销余额与到期日(t *testing.
 	row := items[0].(map[string]any)
 	if row["customer_name"] != "「本地测试」华北贸易" || row["outstanding"] != "12.34" || row["due_date"] != time.Now().UTC().Format("2006-01-02") {
 		t.Fatalf("customer_name / outstanding / due_date 不对：%v", row)
+	}
+}
+
+// GET /ar-ledger/summary：金额是字符串、账龄四个桶都在、按调用者的法人授权过滤、
+// customer_id 透传。
+func TestARLedgerSummary_REST(t *testing.T) {
+	r, _ := testRepo(t)
+	ctx := context.Background()
+	customer := uniqueID("http-sum-cust")
+	if _, err := r.PostSalesOrderEntry(ctx, repo.SalesOrderEventInput{OrderID: uniqueID("http-sum-order"), CustomerID: customer, Amount: "7.25", EventVersion: 1}); err != nil {
+		t.Fatal(err)
+	}
+	code, body := get(t, r, newSub(t, r, "default"), "/ar-ledger/summary", url.Values{"customer_id": {customer}})
+	if code != http.StatusOK {
+		t.Fatalf("期望 200，实际 %d", code)
+	}
+	aging, _ := body["aging"].(map[string]any)
+	if body["total_receivable"] != "7.25" || body["total_reconciled"] != "0.00" || body["outstanding"] != "7.25" ||
+		aging["d0_30"] != "7.25" || aging["d31_60"] != "0.00" || aging["d61_90"] != "0.00" || aging["d90_plus"] != "0.00" ||
+		body["as_of"] != time.Now().UTC().Format("2006-01-02") {
+		t.Fatalf("统计结果不对：%v", body)
+	}
+
+	// 没有 default 法人授权的调用者：同一个客户的应收一分都看不到。
+	_, body = get(t, r, newSub(t, r), "/ar-ledger/summary", url.Values{"customer_id": {customer}})
+	if body["total_receivable"] != "0.00" {
+		t.Fatalf("没有法人授权时应收合计应该是 0.00，实际 %v", body["total_receivable"])
 	}
 }

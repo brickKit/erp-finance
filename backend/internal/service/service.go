@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"time"
 
 	besdk "github.com/brickKit/be-sdk-go"
 	"github.com/brickKit/erp-finance/v2/backend/internal/repo"
@@ -201,6 +202,17 @@ func (s *Service) ListARLedger(ctx context.Context, in repo.ListARLedgerInput) (
 	}
 	in.AllowedLegalEntityIDs = allowed
 	return s.repo.ListARLedger(ctx, in)
+}
+
+// SummarizeARLedger 是仪表盘的应收统计：调用者有权看到的法人范围内，账龄算到今天（UTC）。
+func (s *Service) SummarizeARLedger(ctx context.Context, customerID string) (*repo.ARSummary, error) {
+	allowed, err := s.allowedLegalEntityIDs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return s.repo.SummarizeARLedger(ctx, repo.ARSummaryInput{
+		CustomerID: customerID, AsOf: time.Now().UTC(), AllowedLegalEntityIDs: allowed,
+	})
 }
 
 // ── legal_entity_access 管理（阶段三 Task 6）──
