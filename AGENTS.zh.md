@@ -26,7 +26,7 @@
 | `backend/internal/grpc/grpc.go` | `erp.finance.v1.FinanceService` |
 | `backend/internal/consumer/consumer.go` | 四个被消费 subject 的订阅与它们的 payload 结构 |
 | `backend/internal/partition/` | `event_outbox` / `event_inbox` 的周分区，提前四周建好 |
-| `migrations/` | SQL 迁移，由 `migrations/embed.go` 嵌进二进制；`003` 预置科目与 FY2026 的期间 |
+| `migrations/` | SQL 迁移，由 `migrations/embed.go` 嵌进二进制；`003` 预置科目与 FY2026 的期间，`008` 开 FY2027 |
 | `contracts/` | proto、OpenAPI、事件 schema |
 | `gen/erp/finance/` | 生成的 Go 代码：独立的嵌套 Go 模块，单独打 gen/erp/finance/v1.x.y 的 tag；不手改 |
 | `scripts/` | 本地演示数据 `seed.sh` |
@@ -39,7 +39,7 @@
 | 应收列表或账龄 | `backend/internal/repo/arledger.go` | `backend/internal/http/http.go`、`contracts/finance.openapi.yaml`、`backend/internal/repo/arsummary_test.go` |
 | 新的 REST 查询参数 | `backend/internal/http/http.go` | `contracts/finance.openapi.yaml`、`backend/internal/http/http_test.go` |
 | 谁能看哪个法人 | `backend/internal/repo/access.go` | `backend/internal/service/service.go`（`allowedLegalEntityIDs`） |
-| 开新的会计年度 | `migrations/`（一份新迁移：期间与分录行分区） | 照 `migrations/003_seed_accounts_and_periods.up.sql` 的写法 |
+| 开新的会计年度 | `migrations/`（一份新迁移：每个法人的期间与分录行分区） | 照 `migrations/008_open_fiscal_year_2027.up.sql` 的写法 |
 | 某个错误回错了状态码 | `backend/internal/service/status.go` | `backend/internal/repo/repo.go` 里的哨兵错误 |
 
 ## 构建与测试
@@ -78,7 +78,7 @@ make docs-check              # "0 with errors, 0 warnings"
 | 用 `strconv.ParseFloat` 解析金额 | `"NaN"` 能过账；大额时差一分被当成平衡 | 用 `parseCents` / `NUMERIC` |
 | 在任何地方把 schema 写成字面量 `"erp_finance"` | 这里能跑；换一个 `PG_SCHEMA` 事件就写进别的 outbox，永远发不出去 | `publish` 从 `current_schema()` 取 schema |
 | 从 gRPC 或 `Start()` 调面向用户的 service 方法 | `besdk.ScopeOf` panic（gRPC 回 `INTERNAL`） | 只有 REST 请求带验过签的 Claims |
-| 让会计年度用完 | 2027-01-01 起每一次过账（包括每一条销售订单事件）都以 `NotFound` 失败，事件被丢掉 | 期间与分录行分区只建到 FY2026；新年度是一份迁移 |
+| 下一个会计年度没开 | 从 1 月 1 日起每一次过账（包括每一条销售订单事件）都以 `NotFound` 失败，事件被丢掉 | 期间与分录行分区只建到 FY2027（`008`）；在有"开会计年度"操作之前，每个新年度都是一份迁移 |
 | 测试里用固定的 `aggregate_id` / `idempotency_key` | 第二次跑时被 inbox 跳过或被幂等重放，测试什么都没测 | 测试一律用 `uniqueID` 与 `UnixNano` |
 
 ## 改代码前自查

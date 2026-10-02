@@ -20,7 +20,7 @@ This component is the event sink of the project: what happens elsewhere becomes 
 
 | Table | Partitioned | Notes |
 |---|---|---|
-| `fiscal_years` | no | FY2026 only, created by migration |
+| `fiscal_years` | no | FY2026 (`003`) and FY2027 (`008`), created by migration |
 | `accounting_periods` | no | natural key `(period, legal_entity_id)`; status `OPEN` / `CLOSED` / `LOCKED`; `last_post_seq` is the `post_no` counter |
 | `accounts` | no | five accounts seeded by migration: `1122` receivables, `2202` payables, `1405` inventory, `6001` revenue, `6401` cost of sales |
 | `finance_journal_entries` | **no** | the header; carries the source-document unique index (see Contract surface) and `post_no` unique per legal entity |
@@ -157,7 +157,7 @@ The scope data is this component's own (`legal_entity_access`), not a JWT claim.
 
 | Question | Current answer |
 |---|---|
-| The fiscal year ends on 2026-12-31 | From 2027-01-01 every posting fails with `NotFound`, including every sales-order event (dropped). A migration for FY2027 (periods for each legal entity and twelve line partitions) is needed before then; an "open fiscal year" operation is the longer-term answer |
+| Opening a fiscal year | Periods exist up to 2027-12-31 (migration `008`). Without the next year's periods every posting from 1 January fails with `NotFound`, including every event-driven entry, and those events are lost (delivery is at most once). Opening a year is a business act, so it needs an admin endpoint (key `erp.finance.close` or a new one) or a scheduled opener that creates the next year ahead of time, plus an alert when the next year is not open by the fourth quarter. Until then each year is a migration like `008` |
 | Real cost of inventory adjustments | Placeholder 1 per unit. Standard / moving average / FIFO is a costing slot candidate, and which component should own it (amounts here, quantities in inventory) is undecided |
 | Receivables are never settled | No receipt flow writes `reconciled_amount` or reduces credit used; credit used only grows. The receipt flow belongs to a payment integration |
 | Credit used vs the ledger | The ledger is the truth, credit used a cached figure; a reconciliation job comparing them is not built |

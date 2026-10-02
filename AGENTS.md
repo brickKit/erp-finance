@@ -26,7 +26,7 @@ The AI guide to developing this component. How to use it, its boundaries and con
 | `backend/internal/grpc/grpc.go` | `erp.finance.v1.FinanceService` |
 | `backend/internal/consumer/consumer.go` | Subscriptions to the four consumed subjects and their payload structs |
 | `backend/internal/partition/` | Weekly partitions of `event_outbox` / `event_inbox`, four weeks ahead |
-| `migrations/` | SQL migrations, embedded by `migrations/embed.go`; `003` seeds accounts and the FY2026 periods |
+| `migrations/` | SQL migrations, embedded by `migrations/embed.go`; `003` seeds accounts and the FY2026 periods, `008` opens FY2027 |
 | `contracts/` | proto, OpenAPI, event schema |
 | `gen/erp/finance/` | Generated Go code: a nested Go module, tagged on its own as gen/erp/finance/v1.x.y; never edited by hand |
 | `scripts/` | `seed.sh` for local demo data |
@@ -39,7 +39,7 @@ The AI guide to developing this component. How to use it, its boundaries and con
 | Receivable list or aging | `backend/internal/repo/arledger.go` | `backend/internal/http/http.go`, `contracts/finance.openapi.yaml`, `backend/internal/repo/arsummary_test.go` |
 | A new REST query parameter | `backend/internal/http/http.go` | `contracts/finance.openapi.yaml`, `backend/internal/http/http_test.go` |
 | Who may see which legal entity | `backend/internal/repo/access.go` | `backend/internal/service/service.go` (`allowedLegalEntityIDs`) |
-| A new fiscal year | `migrations/` (a new migration: periods and line partitions) | `migrations/003_seed_accounts_and_periods.up.sql` for the shape |
+| A new fiscal year | `migrations/` (a new migration: periods for every legal entity and line partitions) | `migrations/008_open_fiscal_year_2027.up.sql` for the shape |
 | An error answering with the wrong status | `backend/internal/service/status.go` | the sentinel errors in `backend/internal/repo/repo.go` |
 
 ## Build and test
@@ -78,7 +78,7 @@ Migrations run as the login role `erp_finance_rw`: `make migrate-idempotent` wit
 | Parse an amount with `strconv.ParseFloat` | `"NaN"` posts; a one-cent difference on large amounts is accepted as balanced | Use `parseCents` / `NUMERIC` |
 | Write `"erp_finance"` as a literal schema anywhere | Works here; with another `PG_SCHEMA` events land in the wrong outbox and are never sent | `publish` takes the schema from `current_schema()` |
 | Call a user-facing service method from gRPC or `Start()` | `besdk.ScopeOf` panics (gRPC answers `INTERNAL`) | Only REST requests carry verified claims |
-| Let the fiscal year run out | From 2027-01-01 every posting, including every sales-order event, fails with `NotFound` and the event is dropped | Periods and line partitions exist for FY2026 only; a new year is a migration |
+| Let the next fiscal year go unopened | From 1 January every posting, including every sales-order event, fails with `NotFound` and the event is dropped | Periods and line partitions exist up to FY2027 (`008`); each new year is a migration until an open-fiscal-year operation exists |
 | Use a fixed `aggregate_id` / `idempotency_key` in a test | The second run is skipped by the inbox or replayed, and the test asserts nothing | Tests use `uniqueID` and `UnixNano` everywhere |
 
 ## Before changing code
