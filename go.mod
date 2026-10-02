@@ -13,15 +13,10 @@ require (
 	pgregory.net/rapid v1.3.0
 )
 
-// gen/erp/finance 是本仓库自己嵌套的 go module（不是外部依赖）——独立成
-// module 是为了让外壳（shells/go）能在合并部署时用它自己的 replace 把
-// erp-sales vendor 的同一份契约镜像重定向到这里，避免两份逐字复制的生成代码
-// 在同一个 protobuf 全局注册表里注册同一个文件/类型全名而 panic（阶段四调研
-// 记录 04 §13 有完整推演）。本仓库自己 standalone 构建时用这条本地 replace，
-// 不受影响；只有外壳自己的 go.mod 会把 erp-sales 那一份重定向到这里。
-// ⚠️ module 边界特意切在 gen/erp/finance（不是 gen/erp/finance/v1）：Go 模块路径
-// 禁止以字面量 `/v1`（或 `/v0`）结尾（那会被当成语义化导入版本后缀，只有 v2+
-// 合法），module 只能落在上一级目录，包本身的导入路径（含 /v1）不受影响。
+// gen/erp/finance 是本仓库里嵌套的独立模块：调用方（erp-sales 等）只 require 契约包、
+// 不拉整个组件，进同一个外壳时最小版本选择只选出一份生成代码，protobuf 注册表不会
+// 重复注册。模块路径不能以 /v1 结尾，所以边界切在 v1 的上一级。下面的 replace 只给
+// 本仓库自己构建用；别人拉取时用的是 require 里的契约包 tag。
 replace github.com/brickKit/erp-finance/gen/erp/finance => ./gen/erp/finance
 
 require (

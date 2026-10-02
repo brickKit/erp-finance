@@ -1,9 +1,8 @@
 // Package repo 是 erp-finance 的数据访问层：会计年度/期间、科目表、
 // 凭证头/明细、应收/应付台账、客户信用额度（已用值 + 摘要副本）。
 //
-// ⚠️ 幂等过账是这一层最重的责任：唯一约束 + claim-first 声明两层缺一
-// 不可（设计计划 §2.3），过账时在同一事务里锁期间行做权威判定
-// （§3.1）。
+// 这一层最重的两件事：过账幂等（写命令 claim-first 认领幂等键；自动凭证靠凭证头
+// 上的源单唯一约束认领），以及过账时在同一个事务里锁住期间行做权威判定。
 package repo
 
 import (
@@ -19,7 +18,7 @@ import (
 var ErrInvalidArgument = errors.New("参数不合法")
 var ErrNotFound = errors.New("not found")
 
-// ErrPeriodNotOpen：过账时期间不是 OPEN（权威判定，§3.1 第二层防护）。
+// ErrPeriodNotOpen：过账时覆盖业务日期的期间及其后的期间都不是 OPEN（过账事务内的权威判定）。
 var ErrPeriodNotOpen = errors.New("会计期间不是开放状态")
 
 // ErrUnbalancedEntry：分录借贷不平——复式记账的基本要求。
@@ -32,10 +31,8 @@ var ErrEntryNotPosted = errors.New("凭证尚未过账")
 // ErrEntryAlreadyReversed：这张凭证已经被红字冲销过，不能再冲一次。
 var ErrEntryAlreadyReversed = errors.New("凭证已被冲销")
 
-// ErrForbidden：调用者对某个具体法人没有 legal_entity_access 授权
-// （阶段三 Task 6，§14.2.2 的 legal_entity 维）。⚠️ 同 erp-inventory 的
-// ErrForbidden：这个法人是真实存在的，调用者只是看不见，与 ErrNotFound
-// 语义不同，不能混用。
+// ErrForbidden：调用者对某个具体法人没有 legal_entity_access 授权。这个法人的
+// 数据是存在的，调用者只是无权看或改，与 ErrNotFound 语义不同，不能混用。
 var ErrForbidden = errors.New("无权访问该法人")
 
 // containsString 判断 s 是不是在 allowed 里——写路径校验"请求体里点名的
@@ -59,12 +56,11 @@ func New(db *sql.DB, role, schema string) *Repo {
 	return &Repo{db: db, role: role, schema: schema}
 }
 
-// ── 幂等：claim-first（同 erp-inventory 的判据，Reserve 的重量级写操作
-// 都要这个）。ClosePeriod/ReopenPeriod/LockPeriod/PostManualEntry/
-// ReverseEntry 五个真正的写命令用它；事件驱动的自动过账
-// （PostSalesOrderEntry/PostInventoryAdjustedEntry）不用——它们的幂等
-// 键是 (source_component, source_doc_type, source_doc_id, source_revision)
-// 这条唯一约束本身，不经过 command_idempotency（设计计划 §2.3）。
+// ── 幂等：claim-first。ClosePeriod / ReopenPeriod / LockPeriod / PostManualEntry /
+// ReverseEntry 五个写命令先 INSERT … ON CONFLICT DO NOTHING 认领幂等键再写，两个
+// 带同一个键的并发请求只有一个真正执行。事件驱动的自动过账不经过这张表：它们的
+// 幂等键是凭证头上 (source_component, source_doc_type, source_doc_id,
+// source_revision) 这条唯一约束本身（见 entry.go 的 postEntryTx）。
 func claimIdempotency(ctx context.Context, tx *sql.Tx, key, command string) (claimed bool, err error) {
 	res, err := tx.ExecContext(ctx,
 		`INSERT INTO command_idempotency (idempotency_key, command, result_id) VALUES ($1, $2, '')

@@ -1,5 +1,5 @@
-// legal_entity_access——阶段三 Task 6 的 legal_entity 维数据权限分配表
-// （见 004_create_legal_entity_access.up.sql 顶部注释）。这三个函数是
+// legal_entity_access：legal_entity 维数据范围的分配表——谁能看、能改哪个法人的账
+// （见 004_create_legal_entity_access.up.sql）。这三个函数是
 // 本组件唯一读写这张表的入口，被读接口（过滤 List/Get）与写接口的
 // "点名的法人是否在授权范围内"校验、以及管理接口（grant/revoke）共用。
 package repo
@@ -42,10 +42,9 @@ func (r *Repo) LegalEntityIDsFor(ctx context.Context, sub string) ([]string, err
 	return ids, nil
 }
 
-// GrantLegalEntityAccess 幂等授予——重复授予不报错。legalEntityID 不做
-// 存在性校验：本组件不持有法人主数据（阶段二只有一个自由文本
-// 'default'，见 004 迁移顶部注释），这里只管"谁能看这个字符串过滤出来
-// 的数据"，不管这个字符串本身是不是"合法的法人"。
+// GrantLegalEntityAccess 幂等授予——重复授予不报错。legalEntityID 不做存在性
+// 校验：本组件不持有法人主数据（法人只是会计期间与凭证上的一个字符串，迁移只建了
+// 'default'），这里只管"谁能看这个字符串过滤出来的数据"。
 func (r *Repo) GrantLegalEntityAccess(ctx context.Context, sub, legalEntityID string) error {
 	if legalEntityID == "" {
 		return fmt.Errorf("%w: legal_entity_id 不能为空", ErrInvalidArgument)

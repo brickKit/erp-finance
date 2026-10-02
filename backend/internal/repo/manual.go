@@ -21,8 +21,8 @@ type PostManualEntryInput struct {
 	AllowedLegalEntityIDs []string
 }
 
-// PostManualEntry：自动凭证走事件消费，这里只有人工补录（设计计划
-// §3）。source_component 留空——它没有"源单"的概念。
+// PostManualEntry：自动凭证走事件消费，这里只有人工补录。source_component
+// 留空——人工凭证没有"源单"。
 func (r *Repo) PostManualEntry(ctx context.Context, in PostManualEntryInput) (*Entry, error) {
 	if in.IdempotencyKey == "" {
 		return nil, fmt.Errorf("%w: idempotency_key 不能为空", ErrInvalidArgument)
@@ -74,7 +74,7 @@ type ReverseEntryInput struct {
 	AllowedLegalEntityIDs []string
 }
 
-// ReverseEntry：红字冲销，不是删除（设计计划 §2.1）——原凭证一个字不动，
+// ReverseEntry：红字冲销，不是删除——原凭证一个字不动，
 // 产生一张新的、借贷方向互换的反向凭证，记进**当前**期间（不是原凭证
 // 的历史期间：改历史期间的账违反"过账后永不修改"这条更根本的原则）。
 func (r *Repo) ReverseEntry(ctx context.Context, in ReverseEntryInput) (*Entry, error) {

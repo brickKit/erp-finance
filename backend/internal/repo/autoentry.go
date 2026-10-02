@@ -26,12 +26,12 @@ import (
 	besdk "github.com/brickKit/be-sdk-go"
 )
 
-const defaultLegalEntityID = "default" // 阶段二只有一个默认法人（设计计划 §1）
+// defaultLegalEntityID：上游事件不带法人，自动凭证记在迁移建好的默认法人名下。
+const defaultLegalEntityID = "default"
 
 // SalesOrderEventInput 是消费 sales.order.created.v1 的载荷解析成的入参。
-// LegalEntityID 留着给测试/PostSalesOrderEntry 直调时显式指定用——真实
-// 事件消费路径（backend/internal/consumer）永远传空字符串，erp-sales
-// 契约本身没有法人概念（阶段二只有一个默认法人），走下面的默认值分支。
+// LegalEntityID 留给测试与直接调用时显式指定；事件消费路径（backend/internal/consumer）
+// 永远传空串——erp-sales 的事件没有法人字段，走默认法人。
 type SalesOrderEventInput struct {
 	OrderID       string
 	CustomerID    string
@@ -42,9 +42,9 @@ type SalesOrderEventInput struct {
 
 // postSalesOrderEntryTx 是核心逻辑：生成应收凭证（借 1122 应收账款 /
 // 贷 6001 主营业务收入）+ 一条 ar_ledger 台账行 + 累加
-// customer_credit_exposure；超限发 finance.credit.rejected.v1（设计计划
-// §5：判定发生两次，这是第二次、权威的那次）。duplicate=true 表示这个
-// 源单已经处理过，安全跳过。
+// customer_credit_exposure；超限发 finance.credit.rejected.v1。信用额度判定发生两次：
+// erp-sales 建单前用本地缓存快速预判，这里过账时用权威值再判一次，超限就通知
+// erp-sales 把订单挂起。duplicate=true 表示这个源单已经处理过，安全跳过。
 func postSalesOrderEntryTx(ctx context.Context, tx *sql.Tx, in SalesOrderEventInput) (duplicate bool, err error) {
 	legalEntityID := in.LegalEntityID
 	if legalEntityID == "" {
@@ -148,7 +148,7 @@ func publishCreditRejected(tx *sql.Tx, customerID, orderID, exposure, limit stri
 }
 
 // InventoryAdjustedEventInput 对应消费 erp.inventory.adjusted.v1 的载荷
-// ——这份契约已经真实存在（erp-inventory Task 8），字段直接照抄。
+// （erp-inventory 的 contracts/events/inventory.events.json）。
 type InventoryAdjustedEventInput struct {
 	ProductID     string
 	WarehouseID   string
@@ -159,11 +159,10 @@ type InventoryAdjustedEventInput struct {
 	EventVersion  int64
 }
 
-// postInventoryAdjustedEntryTx：生成存货科目凭证。⚠️ 金额是占位换算
-// （amount = abs(qty_delta)，1 单位 = 1 元），不是真实成本方法——
-// erp-inventory 的事件只带数量不带金额，本组件也没有依赖 mdm-product
-// 去查 standard_cost（设计计划 §9 第 8 条记录了这个已知缺口，留给
-// 出档复盘决定真实成本方法该怎么接）。
+// postInventoryAdjustedEntryTx：生成存货科目凭证。金额是占位换算
+// （amount = abs(qty_delta)，1 单位 = 1 元），不是真实成本方法：erp-inventory 的事件
+// 只带数量不带金额，本组件也不依赖 mdm-product 去查 standard_cost。真实成本方法
+// （标准成本 / 移动加权 / FIFO）该放在哪个组件还没定，见 docs/design.md 的未决问题。
 func postInventoryAdjustedEntryTx(ctx context.Context, tx *sql.Tx, in InventoryAdjustedEventInput) (duplicate bool, err error) {
 	legalEntityID := in.LegalEntityID
 	if legalEntityID == "" {
@@ -217,11 +216,10 @@ func (r *Repo) PostInventoryAdjustedEntry(ctx context.Context, in InventoryAdjus
 	return duplicate, err
 }
 
-// accountsForInventoryReason 是阶段二的简化会计处理：入库借存货、贷
-// 应付（假设都是赊购，阶段二没有 erp-purchase 校验实际付款方式）；
-// 出库贷存货、借主营业务成本；盘盈盘亏借贷互换但都对存货与成本，
-// 不单独开"盘盈盘亏"科目——5 个最小科目集里没有这一项（设计计划 §9
-// 第 2 条：完整科目表是本地化的事）。
+// accountsForInventoryReason 是简化的会计处理：入库借存货、贷应付（一律当赊购，
+// 没有采购组件告诉我们实际付款方式）；出库贷存货、借主营业务成本；盘盈盘亏借贷
+// 互换但都对存货与成本，不单独开"盘盈盘亏"科目——迁移只预置 5 个最小科目，
+// 完整科目表是本地化的事。
 func accountsForInventoryReason(reason string) (debitCode, creditCode string) {
 	switch reason {
 	case "RECEIVE":

@@ -1,7 +1,6 @@
-// Package service 是 erp-finance 的业务规则层：入参校验 + 给 http/grpc
-// 一个不依赖 repo 内部细节的稳定入口。真正的过账逻辑、期间权威判定、
-// 幂等约束都在 repo 层随 SQL 一起做，这一层依然薄（同 erp-inventory
-// 的判据）。
+// Package service 是 erp-finance 的业务规则层：入参校验 + 给 http/grpc 一个
+// 不依赖 repo 内部细节的稳定入口。过账逻辑、期间的权威判定、幂等约束都在 repo 层
+// 随 SQL 一起做，这一层保持薄。
 package service
 
 import (
@@ -26,13 +25,12 @@ func New(r *repo.Repo, logger *slog.Logger) *Service {
 	return &Service{repo: r, logger: logger}
 }
 
-// allowedLegalEntityIDs 是 ClosePeriod/ReopenPeriod/LockPeriod/
-// PostManualEntry/ReverseEntry/GetEntry/ListEntries/ListARLedger 八个
-// REST 端点共用的一步——同 erp-inventory 的 allowedWarehouseIDs，只用于
-// REST 端点：CheckPeriodOpen/GetCreditExposure/BatchGetCreditExposure
-// 是组件间 gRPC 协议，ctx 里没有经过 besdk.RequirePermission 验签的
-// Claims，调 ScopeOf 会 panic（阶段三 Task 6 讨论定案：gRPC 侧数据权限
-// 透传是更大的独立工作，不在本任务范围）。
+// allowedLegalEntityIDs 查调用者的 legal_entity_access 授权列表，所有面向用户的
+// 读写方法都先走这一步。它要求 ctx 里有 RequirePermission 验过签的 Claims，所以
+// 只在 REST 的用户请求路径上成立：gRPC 没有用户身份透传，gRPC 的 ClosePeriod、
+// PostManualEntry、ListEntries 等走到这里时 besdk.ScopeOf 会 panic（SDK 的 gRPC
+// recovery 把它变成 Internal）。组件之间用的 CheckPeriodOpen、GetCreditExposure、
+// BatchGetCreditExposure 不经过这里。
 func (s *Service) allowedLegalEntityIDs(ctx context.Context) ([]string, error) {
 	sub := besdk.ScopeOf(ctx).Owner
 	return s.repo.LegalEntityIDsFor(ctx, sub)
@@ -215,7 +213,7 @@ func (s *Service) SummarizeARLedger(ctx context.Context, customerID string) (*re
 	})
 }
 
-// ── legal_entity_access 管理（阶段三 Task 6）──
+// ── legal_entity_access 管理 ──
 
 func (s *Service) ListLegalEntityAccess(ctx context.Context, sub string) ([]string, error) {
 	if sub == "" {

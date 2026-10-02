@@ -1,6 +1,6 @@
-// 客户信用额度：本组件只持有"已用额度"（exposure），额度值本身在
-// mdm-customer，走事件摘要副本（customer_credit_snapshots），设计计划
-// §5 的三方分工。
+// 客户信用额度：本组件持有"已用额度"（exposure，过账时累加），额度值本身是
+// mdm-customer 的主数据，本组件只在客户摘要副本（customer_credit_snapshots）里
+// 存一份，两者相减才是可用额度。
 package repo
 
 import (
@@ -38,8 +38,8 @@ func (r *Repo) GetCreditExposure(ctx context.Context, customerID string) (*Credi
 	return &ce, nil
 }
 
-// BatchGetCreditExposure 是防 N+1 的唯一合法调用方式（§3.8）。缺失的
-// 客户视为已用额度 0（同 GetCreditExposure 的判据）。
+// BatchGetCreditExposure：调用方要查多个客户时一次取回，不要循环调单个的。缺失的
+// 客户视为已用额度 0（同 GetCreditExposure）。
 func (r *Repo) BatchGetCreditExposure(ctx context.Context, customerIDs []string) ([]*CreditExposure, error) {
 	if len(customerIDs) == 0 {
 		return nil, nil

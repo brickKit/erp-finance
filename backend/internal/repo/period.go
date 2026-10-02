@@ -1,4 +1,5 @@
-// 会计期间：三态管理 + 跨组件期间锁的两层防护（设计计划 §2.2、§3.1）。
+// 会计期间：三态（OPEN / CLOSED / LOCKED）管理，以及别的组件改历史单据前的期间锁
+// 咨询入口；过账时的权威判定在 lockOpenPeriodForDate。
 package repo
 
 import (
@@ -16,10 +17,10 @@ const (
 	PeriodLocked = "LOCKED"
 )
 
-// CheckPeriodOpen 是**咨询性**的，不是权威判定（设计计划 §3.1）：上游
-// 改历史单据前先问一句，用来给用户一个及时的、体面的报错。真正的权威
-// 判定发生在过账事务内部（见 entry.go 的 postEntryTx），check 与
-// write 之间的竞态是接受的（设计计划 §9 第 3 条）。
+// CheckPeriodOpen 是咨询性的，不是权威判定：上游改历史单据前先问一句，用来给
+// 用户一个及时、体面的报错。权威判定发生在过账事务内部（entry.go 的
+// postEntryTx）。问与写之间的竞态是接受的：关账在现实里是一段人工流程，问的那一刻
+// 是 OPEN 只代表那一刻。
 func (r *Repo) CheckPeriodOpen(ctx context.Context, period, legalEntityID string) (string, error) {
 	var status string
 	err := besdk.WithTx(ctx, r.db, r.role, r.schema, func(tx *sql.Tx) error {
@@ -43,9 +44,8 @@ type PeriodOpInput struct {
 	IdempotencyKey string
 	Period         string
 	LegalEntityID  string
-	// AllowedLegalEntityIDs 是调用者当前的 legal_entity_access 授权列表
-	// （阶段三 Task 6）——service 层从 besdk.ScopeOf(ctx) 取 sub 查出来
-	// 再传进来。请求体点名的 LegalEntityID 不在这份列表里就是
+	// AllowedLegalEntityIDs 是调用者当前的 legal_entity_access 授权列表——service
+	// 层从 besdk.ScopeOf(ctx) 取 sub 查出来再传进来。请求体点名的 LegalEntityID 不在这份列表里就是
 	// ErrForbidden：关/开/锁期间是强操作，写路径必须和读路径一样受
 	// legal_entity 维数据权限约束，不能只保护读接口。
 	AllowedLegalEntityIDs []string
@@ -109,7 +109,7 @@ func transitionPeriod(ctx context.Context, r *Repo, in PeriodOpInput, command st
 	return status, nil
 }
 
-// ClosePeriod：OPEN → CLOSED（可逆的日常操作，设计计划 §2.2）。
+// ClosePeriod：OPEN → CLOSED（可逆的日常操作；LOCKED 才是不可逆的终态）。
 func (r *Repo) ClosePeriod(ctx context.Context, in PeriodOpInput) (string, error) {
 	return transitionPeriod(ctx, r, in, "ClosePeriod", PeriodOpen, PeriodClosed)
 }
@@ -132,11 +132,10 @@ type periodRow struct {
 	LastPostSeq int64
 }
 
-// lockOpenPeriodForDate 是过账事务内部的权威判定（§3.1 第二层，不可
-// 绕过）：按业务日期找到覆盖它的期间；如果那个期间不是 OPEN，按"迟到的
-// 凭证记进下一个开放期间"（§3.1，会计上叫"以后期间调整"）顺延到下一个
-// OPEN 期间，而不是拒绝。⚠️ FOR UPDATE：这把锁同时用来序列化 post_no
-// 的分配（设计计划 §9 第 7 条），不是只为了判状态。
+// lockOpenPeriodForDate 是过账事务内部的权威判定，不可绕过：按业务日期找到覆盖
+// 它的期间；那个期间不是 OPEN 时，按"迟到的凭证记进下一个开放期间"（会计上叫
+// 以后期间调整）顺延到下一个 OPEN 期间，而不是拒绝。FOR UPDATE 这把锁同时用来
+// 串行化同一期间的 post_no 分配，不是只为了判状态。
 func lockOpenPeriodForDate(ctx context.Context, tx *sql.Tx, legalEntityID string, businessDate time.Time) (*periodRow, error) {
 	rows, err := tx.QueryContext(ctx, `
 		SELECT period, status, last_post_seq
@@ -174,9 +173,9 @@ func lockOpenPeriodForDate(ctx context.Context, tx *sql.Tx, legalEntityID string
 		ErrPeriodNotOpen, businessDate.Format("2006-01-02"))
 }
 
-// nextPostNo 在同一把已经锁住的期间行上分配下一个过账号——同一期间内
-// 连续无缺口（只在事务提交时才真正占号，回滚不留缺口，设计计划 §9
-// 第 7 条）。
+// nextPostNo 在已经锁住的期间行上分配下一个过账号——同一法人、同一期间内连续
+// 无缺口：计数器随事务一起提交或回滚，回滚不占号（序列做不到这一点，回滚也会
+// 留下缺口）。
 func nextPostNo(ctx context.Context, tx *sql.Tx, legalEntityID string, p *periodRow) (string, error) {
 	next := p.LastPostSeq + 1
 	if _, err := tx.ExecContext(ctx, `

@@ -78,7 +78,7 @@ func (r *Repo) GetEntry(ctx context.Context, id string, allowedLegalEntityIDs []
 	return e, nil
 }
 
-// ListInput 对应 ListEntriesRequest。刻意没有 offset 字段（决策 53）。
+// ListInput 对应 ListEntriesRequest。没有 offset 字段：列表一律游标分页。
 type ListInput struct {
 	Cursor        string
 	PageSize      int
@@ -88,9 +88,8 @@ type ListInput struct {
 	SourceDocType string
 	CreatedAfter  time.Time
 	CreatedBefore time.Time
-	// AllowedLegalEntityIDs 见 period.go 的 PeriodOpInput 同名字段注释
-	// ——**必须**下推进 SQL 的 WHERE 子句，不能查出结果后在 Go 里再
-	// 过滤（决策 53、§14.2.4 的既有判据）。
+	// AllowedLegalEntityIDs 见 period.go 的 PeriodOpInput 同名字段注释——必须下推进
+	// SQL 的 WHERE 子句：查出来再在 Go 里过滤，一页就不满、游标也会跳过行。
 	AllowedLegalEntityIDs []string
 }
 
@@ -162,9 +161,8 @@ func (r *Repo) ListEntries(ctx context.Context, in ListInput) (*ListResult, erro
 			return err
 		}
 
-		// ⚠️ N+1：每个 id 再查一次头 + 行。List 的默认页大小与强制时间
-		// 窗口（besdk.ListWindow）把 N 卡在合理范围内，阶段二先接受这个
-		// 代价——真影响性能了再优化成一次批量 JOIN 查询。
+		// N+1：每个 id 再查一次头 + 行。列表的页大小上限与默认时间窗口
+		// （besdk.ListWindow）把 N 卡在合理范围内；真影响性能时改成一次批量查询。
 		entries := make([]*Entry, 0, len(ids))
 		for _, rawID := range ids {
 			e, err := getEntryTx(ctx, tx, strconv.FormatInt(rawID, 10))

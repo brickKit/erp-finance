@@ -1,11 +1,10 @@
-// Package consumer 消费三个不同来源的事件——本阶段消费面最重的组件
-// （设计计划 §4）：
-//   - sales.order.created.v1（erp-sales）  → 生成应收凭证 + 累加已用额度
-//   - erp.inventory.adjusted.v1（erp-inventory） → 生成存货科目凭证
-//   - mdm.customer.created.v1/.updated.v1（mdm-customer） → 维护信用额度摘要副本
+// Package consumer 消费三个来源的事件，把别人发生的事变成会计语言：
+//   - sales.order.created.v1（erp-sales）        → 应收凭证 + 应收台账 + 累加已用额度
+//   - erp.inventory.adjusted.v1（erp-inventory） → 存货科目凭证
+//   - mdm.customer.created/updated.v1（mdm-customer） → 客户摘要副本（额度值、客户名）
 //
-// 三个 subject 各自跑在自己的 goroutine 里（besdk.Consume 是阻塞到 ctx
-// 取消才返回的循环），互不影响。
+// 每个 subject 跑在自己的 goroutine 里（besdk.Consume 阻塞到 ctx 取消才返回），
+// 互不影响。
 package consumer
 
 import (
@@ -44,20 +43,13 @@ func Start(ctx context.Context, db *sql.DB, role, schema string, nc *nats.Conn, 
 	case <-ctx.Done():
 		return nil
 	case err := <-errCh:
-		return err // ⚠️ 返回 error，不许 log.Fatal（§13.3 铁律七）
+		return err // 返回 error，不 log.Fatal：进外壳后一个成员退出进程，同进程的成员全部下线
 	}
 }
 
-// salesOrderPayload 字段直接照抄 erp-sales 已经真实发布的契约
-// （erp-sales Task 17，contracts/events/sales.events.json）。
-//
-// ⚠️ 这份 struct 曾经是"先按设计计划 §4 的描述假定的形状"（erp-sales
-// 那时还没建），字段名猜错了一处：这里原来写的是 amount，erp-sales 真实
-// 发布的字段是 total_amount——erp-sales 建完回来对的时候发现并改掉，
-// 这正是当时那条注释预留的"要回头对一遍"。legal_entity_id 也不存在于
-// 真实契约里（erp-sales 阶段二没有法人概念）——不需要单独处理，
-// postSalesOrderEntryTx 本来就会在 LegalEntityID 为空时退回
-// defaultLegalEntityID（阶段二只有一个默认法人）。
+// salesOrderPayload 是 erp-sales 的 sales.order.created.v1 里本组件用到的字段
+// （contracts/events/sales.events.json）。事件不带法人：凭证记在默认法人名下
+// （见 repo.SalesOrderEventInput）。
 type salesOrderPayload struct {
 	OrderID     string `json:"order_id"`
 	CustomerID  string `json:"customer_id"`
@@ -70,10 +62,9 @@ func salesOrderHandler(logger *slog.Logger) func(context.Context, *sql.Tx, besdk
 		if err := json.Unmarshal(ev.Payload, &p); err != nil {
 			return fmt.Errorf("解析 %s payload: %w", ev.Subject, err)
 		}
-		// ⚠️ PostSalesOrderEntryTx 而不是 repo.Repo 的 PostSalesOrderEntry：
-		// 这个 handler 已经在 besdk.Consume 给的事务里，不能再开一个
-		// besdk.WithTx（那是另一个独立会话，不是同一个事务）。见
-		// repo/autoentry.go 顶部注释。
+		// 用 PostSalesOrderEntryTx 而不是 Repo.PostSalesOrderEntry：handler 已经在
+		// besdk.Consume 给的事务里（event_inbox 的记录也在这个事务里），再开一个
+		// besdk.WithTx 就是另一个会话，凭证与"消息已处理"不再一起提交或回滚。
 		return repo.PostSalesOrderEntryTx(ctx, tx, repo.SalesOrderEventInput{
 			OrderID: p.OrderID, CustomerID: p.CustomerID, Amount: p.TotalAmount,
 			EventVersion: ev.Version,
@@ -81,8 +72,8 @@ func salesOrderHandler(logger *slog.Logger) func(context.Context, *sql.Tx, besdk
 	}
 }
 
-// inventoryAdjustedPayload 字段直接照抄 erp-inventory 已经真实存在的
-// 契约（contracts/events/inventory.events.json，Task 8）。
+// inventoryAdjustedPayload 是 erp-inventory 的 erp.inventory.adjusted.v1 里本组件
+// 用到的字段（contracts/events/inventory.events.json）。
 type inventoryAdjustedPayload struct {
 	ProductID   string `json:"product_id"`
 	WarehouseID string `json:"warehouse_id"`

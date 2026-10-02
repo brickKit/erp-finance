@@ -1,4 +1,4 @@
-// Package grpc 实现 erp.finance.v1.FinanceService——内部 gRPC 面（§2.1）。
+// Package grpc 实现 erp.finance.v1.FinanceService——组件之间调用的内部接口。
 // HTTP 与 gRPC 共用同一个 service.Service，业务逻辑只写一遍。
 package grpc
 
@@ -85,7 +85,7 @@ func (s *server) GetCreditExposure(ctx context.Context, req *financev1.GetCredit
 	return toProtoCreditExposure(ce), nil
 }
 
-// BatchGetCreditExposure 是防 N+1 的唯一合法调用方式（§3.8）。
+// BatchGetCreditExposure：调用方要查多个客户时用它一次取回，不要循环调 GetCreditExposure。
 func (s *server) BatchGetCreditExposure(ctx context.Context, req *financev1.BatchGetCreditExposureRequest) (*financev1.BatchGetCreditExposureResponse, error) {
 	exposures, err := s.svc.BatchGetCreditExposure(ctx, req.CustomerIds)
 	if err != nil {

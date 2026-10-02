@@ -1,9 +1,9 @@
-// Package partition 是 Module.Start 的后台循环之一：为 event_outbox/
-// event_inbox 自动创建未来的周分区（决策 54、§11.5.1）。
+// Package partition 是 Module.Start 的后台循环之一：为 event_outbox /
+// event_inbox 提前建好未来的周分区（分区不存在时写入会失败）。
 //
-// ⚠️ finance_journal_entry_lines 不在这里——它按会计期间 LIST 分区，
-// 不配后台自动建分区任务（设计计划 §9 第 6 条：开新会计年度是业务
-// 动作，不是日历滚动窗口）。这一点与 erp-inventory 的月分区不同。
+// finance_journal_entry_lines 不在这里：它按会计期间 LIST 分区，不配后台自动
+// 建分区——开新的会计年度是一次业务动作（开账），不是日历滚动的必然事实，
+// 新财年的期间与分区由一份新的迁移建。
 package partition
 
 import (
@@ -23,8 +23,8 @@ const (
 
 var weeklyPartitionedTables = []string{"event_outbox", "event_inbox"}
 
-// Start 立刻检查一次，之后每 24 小时检查一次。单次检查失败只记日志，
-// 不让整个循环退出——下一轮还有机会补上（§13.3 铁律七）。
+// Start 立刻检查一次，之后每 24 小时检查一次。单次检查失败只记日志，不让整个
+// 循环退出（下一轮还有机会补上）；返回 error 会让外壳把这个成员的后台循环停掉。
 func Start(ctx context.Context, db *sql.DB, role, schema string, logger *slog.Logger) error {
 	if err := ensureAllWeekly(ctx, db, role, schema); err != nil {
 		logger.Error("周分区维护失败", "error", err)

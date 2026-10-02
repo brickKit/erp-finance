@@ -1,7 +1,7 @@
-// Package http 是 erp-finance 的 REST 面（对外路径前缀 /erp/finance，
-// 与 assembly.yaml 的 edge_routes 一致）。⚠️ 不暴露 CheckPeriodOpen/
-// BatchGetCreditExposure——前者是组件间期间锁的咨询性入口，后者是给
-// 其他组件 gRPC 客户端防 N+1 用的批量读优化（contracts/finance.openapi.yaml）。
+// Package http 是 erp-finance 的 REST 面（对外路径前缀 /erp/finance，与
+// assembly.yaml 的 edge_routes 一致）。不暴露 CheckPeriodOpen 与
+// BatchGetCreditExposure：前者是组件之间期间锁的咨询入口，后者是给别的组件的
+// gRPC 客户端一次取多个客户用的，都不是人的操作。
 package http
 
 import (
@@ -18,16 +18,13 @@ import (
 	"github.com/brickKit/erp-finance/v2/backend/internal/service"
 )
 
-// RegisterRoutes 挂载业务路由。
+// RegisterRoutes 挂载业务路由，每条都带 assembly.yaml 里声明的权限键：
+// erp.finance.view 管全部读，erp.finance.post 管手工过账与冲销，erp.finance.close
+// 管关账 / 反关账 / 锁定期间，erp.finance.manage_access 管法人访问授权。
 //
-// 阶段三 Task 6：权限键从阶段二的 besdk.Public 换成 assembly.yaml 里
-// 声明的真实键——`erp.finance.close` 的 title 是"关账/反关账/锁定期间"，
-// 覆盖 close/reopen/lock 三个操作；`erp.finance.post` 的 title 是
-// "手工过账/冲销"，覆盖 postManualEntry/reverseEntry 两个操作。
-// `legal_entity` 维数据范围（谁能看/改哪个法人的账）另见 access.go——
-// 不经 besdk.ScopeOf（那是纯读 JWT 的 org/owner 两维），本组件自己查
-// legal_entity_access 表，写路径（period-ops/postManualEntry）额外校验
-// 请求体里点名的 legal_entity_id 是不是在授权范围内。
+// legal_entity 维的数据范围（谁能看、能改哪个法人的账）不在 JWT 里：本组件自己查
+// legal_entity_access 表（repo/access.go），读路径把授权列表下推进 SQL，写路径
+// 额外核对请求里点名的 legal_entity_id 在不在授权范围内。
 func RegisterRoutes(eng *gin.Engine, svc *service.Service) {
 	g := eng.Group("/erp/finance")
 	besdk.POST(g, "/periods/:period/close", "erp.finance.close", periodOpHandler(svc.ClosePeriod))
@@ -267,7 +264,7 @@ func arLedgerSummaryHandler(svc *service.Service) gin.HandlerFunc {
 	}
 }
 
-// ── legal_entity_access 管理（阶段三 Task 6，erp.finance.manage_access）──
+// ── legal_entity_access 管理（erp.finance.manage_access）──
 
 func listLegalEntityAccessHandler(svc *service.Service) gin.HandlerFunc {
 	return func(c *gin.Context) {
