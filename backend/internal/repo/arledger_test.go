@@ -12,7 +12,7 @@ import (
 func setSnapshot(t *testing.T, db *sql.DB, customerID, name string) {
 	t.Helper()
 	if err := besdk.WithTx(context.Background(), db, "erp_finance_rw", "erp_finance", func(tx *sql.Tx) error {
-		return UpsertCustomerSnapshotTx(tx, customerID, name, "0", 1)
+		return UpsertCustomerSnapshotTx(tx, customerID, name, "0", 1, nil)
 	}); err != nil {
 		t.Fatal(err)
 	}

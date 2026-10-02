@@ -45,7 +45,7 @@ type SalesOrderEventInput struct {
 // customer_credit_exposure；超限发 finance.credit.rejected.v1。信用额度判定发生两次：
 // erp-sales 建单前用本地缓存快速预判，这里过账时用权威值再判一次，超限就通知
 // erp-sales 把订单挂起。duplicate=true 表示这个源单已经处理过，安全跳过。
-func postSalesOrderEntryTx(ctx context.Context, tx *sql.Tx, in SalesOrderEventInput) (duplicate bool, err error) {
+func postSalesOrderEntryTx(ctx context.Context, tx *sql.Tx, in SalesOrderEventInput, logger *slog.Logger) (duplicate bool, err error) {
 	legalEntityID := in.LegalEntityID
 	if legalEntityID == "" {
 		legalEntityID = defaultLegalEntityID
@@ -83,7 +83,7 @@ func postSalesOrderEntryTx(ctx context.Context, tx *sql.Tx, in SalesOrderEventIn
 	}
 	// limit == "0" 视为"还没配额度"（mdm-customer 的默认值），不是
 	// "额度为零、什么都不许赊"——否则每个新客户的第一张订单都会被拒。
-	exceeded, err := exceedsLimit(newExposure, limit)
+	exceeded, err := exceedsLimit(newExposure, limit, in.CustomerID, logger)
 	if err != nil {
 		return false, err
 	}
@@ -98,7 +98,7 @@ func postSalesOrderEntryTx(ctx context.Context, tx *sql.Tx, in SalesOrderEventIn
 // PostSalesOrderEntryTx 供 backend/internal/consumer 在 besdk.Consume
 // 给的事务里直接调用。
 func PostSalesOrderEntryTx(ctx context.Context, tx *sql.Tx, in SalesOrderEventInput, logger *slog.Logger) error {
-	duplicate, err := postSalesOrderEntryTx(ctx, tx, in)
+	duplicate, err := postSalesOrderEntryTx(ctx, tx, in, logger)
 	if err != nil {
 		return err
 	}
@@ -108,22 +108,26 @@ func PostSalesOrderEntryTx(ctx context.Context, tx *sql.Tx, in SalesOrderEventIn
 	return nil
 }
 
-// PostSalesOrderEntry 自己开事务——供测试与非事件消费场景直接调用。
+// PostSalesOrderEntry 自己开事务——供测试与非事件消费场景直接调用（不记日志）。
 func (r *Repo) PostSalesOrderEntry(ctx context.Context, in SalesOrderEventInput) (duplicate bool, err error) {
 	err = besdk.WithTx(ctx, r.db, r.role, r.schema, func(tx *sql.Tx) error {
 		var werr error
-		duplicate, werr = postSalesOrderEntryTx(ctx, tx, in)
+		duplicate, werr = postSalesOrderEntryTx(ctx, tx, in, nil)
 		return werr
 	})
 	return duplicate, err
 }
 
 // exceedsLimit：已用额度严格大于额度值才算超限，按分精确比较。limit 为 0 视为
-// "还没配额度"，不拦。两个值都来自 NUMERIC(18,2) 列的文本形式。
-func exceedsLimit(exposure, limit string) (bool, error) {
+// "还没配额度"，不拦。两个值都来自 NUMERIC(18,2) 列的文本形式。库里的额度解析
+// 不了（1.x 不校验，可能存着 NaN）也按"还没配额度"处理并记 Warn：让过账失败的话，
+// 应收凭证随事务回滚，事件不重投，这张订单的应收就永远没了。
+func exceedsLimit(exposure, limit, customerID string, logger *slog.Logger) (bool, error) {
 	l, err := parseCents("credit_limit", limit)
 	if err != nil {
-		return false, err
+		orDiscard(logger).Warn("客户摘要副本里的 credit_limit 不是合法金额，按未配置额度处理",
+			"customer_id", customerID, "credit_limit", limit)
+		return false, nil
 	}
 	if l.Sign() == 0 {
 		return false, nil

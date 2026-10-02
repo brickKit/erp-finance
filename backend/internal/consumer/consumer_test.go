@@ -185,7 +185,7 @@ func TestConsumer_客户事件维护信用额度摘要副本(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		_ = besdk.Consume(ctx, nc, db, "erp_finance_rw", "erp_finance", subj,
-			customerSnapshotHandler())
+			customerSnapshotHandler(slog.Default()))
 		close(done)
 	}()
 	time.Sleep(150 * time.Millisecond)
@@ -228,7 +228,7 @@ func TestConsumer_客户事件维护客户名(t *testing.T) {
 		wg.Add(1)
 		go func(subj string) {
 			defer wg.Done()
-			_ = besdk.Consume(ctx, nc, db, "erp_finance_rw", "erp_finance", subj, customerSnapshotHandler())
+			_ = besdk.Consume(ctx, nc, db, "erp_finance_rw", "erp_finance", subj, customerSnapshotHandler(slog.Default()))
 		}(subj)
 	}
 	time.Sleep(150 * time.Millisecond)

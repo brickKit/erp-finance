@@ -76,6 +76,7 @@ make docs-check              # "0 with errors, 0 warnings"
 | `UPDATE` / `DELETE` 已过账的凭证 | 测试可能照样绿；账与报出去的数字对不上 | 过账即终态；用 `ReverseEntry` 纠正（每张只能一次） |
 | 把 `CheckPeriodOpen` 当成"可以写" | 关账那一刻的窗口里漏过一张凭证 | 它只是咨询；算数的判定在 `postEntryTx` 里 |
 | 用 `strconv.ParseFloat` 解析金额 | `"NaN"` 能过账；大额时差一分被当成平衡 | 用 `parseCents` / `NUMERIC` |
+| 别的组件事件里的十进制值不过 `parseCents` 就写进 `NUMERIC` 列 | PostgreSQL 照存 `NaN`；之后每一次读到它的过账都失败，背后的销售订单事件被丢掉 | 进库前校验；不合法的额度按 `0`（未配置）存并记 Warn |
 | 在任何地方把 schema 写成字面量 `"erp_finance"` | 这里能跑；换一个 `PG_SCHEMA` 事件就写进别的 outbox，永远发不出去 | `publish` 从 `current_schema()` 取 schema |
 | 从 gRPC 或 `Start()` 调面向用户的 service 方法 | `besdk.ScopeOf` panic（gRPC 回 `INTERNAL`） | 只有 REST 请求带验过签的 Claims |
 | 下一个会计年度没开 | 从 1 月 1 日起每一次过账（包括每一条销售订单事件）都以 `NotFound` 失败，事件被丢掉 | 期间与分录行分区只建到 FY2027（`008`）；在有"开会计年度"操作之前，每个新年度都是一份迁移 |

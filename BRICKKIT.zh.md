@@ -62,7 +62,7 @@
   - `erp.finance.close`：`POST /periods/{period}/close`、`/reopen`、`/lock`（幂等；`LOCKED` 是终态，锁定前必须先 `CLOSED`）。
   - `erp.finance.manage_access`：`GET` / `POST /legal-entity-access/{sub}`、`DELETE /legal-entity-access/{sub}/{legal_entity_id}`。
   - 金额一律十进制字符串；列表一律游标分页，没有 offset。
-- `contracts/events/finance.events.json` — 经 outbox 发布：`finance.voucher.posted.v1`（每次过账之后；给报表用）与 `finance.credit.rejected.v1`（销售订单过账使客户已用额度超过已配置的额度时）。消费（每条按 `(subject, aggregate_id, version)` 只处理一次，每张源单至多过账一次）：`sales.order.created.v1`（应收凭证、到期日为记账当天的应收台账行、已用额度）、`erp.inventory.adjusted.v1`（按占位金额记存货凭证）、`mdm.customer.created.v1` / `mdm.customer.updated.v1`（客户摘要副本，版本大的为准）。
+- `contracts/events/finance.events.json` — 经 outbox 发布：`finance.voucher.posted.v1`（每次过账之后；给报表用）与 `finance.credit.rejected.v1`（销售订单过账使客户已用额度超过已配置的额度时）。消费（每条按 `(subject, aggregate_id, version)` 只处理一次，每张源单至多过账一次）：`sales.order.created.v1`（应收凭证、到期日为记账当天的应收台账行、已用额度）、`erp.inventory.adjusted.v1`（按占位金额记存货凭证）、`mdm.customer.created.v1` / `mdm.customer.updated.v1`（客户摘要副本，版本大的为准；不是合法金额的 `credit_limit` 按未配置额度处理）。
 - `assembly.yaml` — 本项目自己的元数据：四个权限键、菜单项、网关路由 `/erp/finance/**`、schema 与角色，以及凭证头、分录行、应收与应付台账上的数据范围 `legal_entity`（`mode: in`）。
 
 ## 外壳声明

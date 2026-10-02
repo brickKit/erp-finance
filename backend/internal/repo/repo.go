@@ -10,8 +10,17 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strconv"
 )
+
+// orDiscard：调用方没给 logger（测试、直接调用）时什么都不记。
+func orDiscard(logger *slog.Logger) *slog.Logger {
+	if logger == nil {
+		return slog.New(slog.DiscardHandler)
+	}
+	return logger
+}
 
 // ── 哨兵错误。grpc/http 两层通过 service.ToStatus 统一映射（同 erp-inventory）──
 

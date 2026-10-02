@@ -212,7 +212,7 @@ func TestListARLedger_REST返回客户名未核销余额与到期日(t *testing.
 	ctx := context.Background()
 	customer := uniqueID("http-ar-name")
 	if err := besdk.WithTx(ctx, db, role, schema, func(tx *sql.Tx) error {
-		return repo.UpsertCustomerSnapshotTx(tx, customer, "「本地测试」华北贸易", "0", 1)
+		return repo.UpsertCustomerSnapshotTx(tx, customer, "「本地测试」华北贸易", "0", 1, nil)
 	}); err != nil {
 		t.Fatal(err)
 	}

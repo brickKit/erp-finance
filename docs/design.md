@@ -101,7 +101,7 @@ Consumed:
 |---|---|---|
 | `sales.order.created.v1` | `erp/sales` | receivable entry (debit `1122`, credit `6001`), a receivable row due on the posting date, credit used increased, over-limit check |
 | `erp.inventory.adjusted.v1` | `erp/inventory` | inventory entry: receive debits `1405` / credits `2202`; issue and loss debit `6401` / credit `1405`; gain the reverse. Amount = abs(qty) at 1 per unit, a placeholder |
-| `mdm.customer.created.v1`, `mdm.customer.updated.v1` | `mdm/customer` | customer summary copy (limit, name); applied only when the event's version is greater than the stored one, because the inbox is monotonic per subject and these are two subjects |
+| `mdm.customer.created.v1`, `mdm.customer.updated.v1` | `mdm/customer` | customer summary copy (limit, name); applied only when the event's version is greater than the stored one, because the inbox is monotonic per subject and these are two subjects. A `credit_limit` that is not a valid amount (`NaN`, negative, exponent form) is stored as `0`, meaning no limit, with a Warn; a stored value that cannot be parsed is treated the same way when posting, so a bad upstream value never blocks a receivable |
 
 The posting date of an event-driven entry is the date it is processed: the events carry no business date, so the period comes from that date. Upstream events have no legal entity; their entries go to the legal entity `default`.
 

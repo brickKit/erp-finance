@@ -3,6 +3,7 @@ package repo
 import (
 	"database/sql"
 	"fmt"
+	"log/slog"
 )
 
 // UpsertCustomerSnapshotTx 维护 mdm-customer 的客户摘要副本：额度值（credit_limit，
@@ -12,7 +13,17 @@ import (
 // WHERE version < EXCLUDED.version 是按聚合版本单调更新：besdk.Consume 的
 // event_inbox 只在同一个 subject 内保证单调，created.v1 和 updated.v1 是两个
 // subject，跨 subject 的乱序要在这一层再挡一次。
-func UpsertCustomerSnapshotTx(tx *sql.Tx, customerID, name, creditLimit string, version int64) error {
+//
+// credit_limit 进 NUMERIC 之前先过 parseCents：上游的校验不归本组件管（已发布的
+// mdm-customer 2.0.0 用 ParseFloat，"NaN" 能通过），NaN 存进来以后这个客户的每一张
+// 销售订单都过不了账。不合法的值按"未配置额度"（0）存，名字照常更新，记一条 Warn。
+// logger 为 nil 时不记。
+func UpsertCustomerSnapshotTx(tx *sql.Tx, customerID, name, creditLimit string, version int64, logger *slog.Logger) error {
+	if _, err := parseCents("credit_limit", creditLimit); err != nil {
+		orDiscard(logger).Warn("mdm-customer 事件里的 credit_limit 不是合法金额，按未配置额度存",
+			"customer_id", customerID, "credit_limit", creditLimit)
+		creditLimit = "0"
+	}
 	if creditLimit == "" {
 		creditLimit = "0"
 	}

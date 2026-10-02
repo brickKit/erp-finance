@@ -27,8 +27,8 @@ func Start(ctx context.Context, db *sql.DB, role, schema string, nc *nats.Conn, 
 	}{
 		{"sales.order.created.v1", salesOrderHandler(logger)},
 		{"erp.inventory.adjusted.v1", inventoryAdjustedHandler(logger)},
-		{"mdm.customer.created.v1", customerSnapshotHandler()},
-		{"mdm.customer.updated.v1", customerSnapshotHandler()},
+		{"mdm.customer.created.v1", customerSnapshotHandler(logger)},
+		{"mdm.customer.updated.v1", customerSnapshotHandler(logger)},
 	}
 
 	errCh := make(chan error, len(subjects))
@@ -101,12 +101,12 @@ type customerPayload struct {
 	CreditLimit string `json:"credit_limit"`
 }
 
-func customerSnapshotHandler() func(context.Context, *sql.Tx, besdk.Event) error {
+func customerSnapshotHandler(logger *slog.Logger) func(context.Context, *sql.Tx, besdk.Event) error {
 	return func(_ context.Context, tx *sql.Tx, ev besdk.Event) error {
 		var p customerPayload
 		if err := json.Unmarshal(ev.Payload, &p); err != nil {
 			return fmt.Errorf("解析 %s payload: %w", ev.Subject, err)
 		}
-		return repo.UpsertCustomerSnapshotTx(tx, p.ID, p.Name, p.CreditLimit, ev.Version)
+		return repo.UpsertCustomerSnapshotTx(tx, p.ID, p.Name, p.CreditLimit, ev.Version, logger)
 	}
 }

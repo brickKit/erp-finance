@@ -423,7 +423,7 @@ func TestPostSalesOrderEntry_超限发布creditRejected事件(t *testing.T) {
 
 	// 先给这个客户一个额度值（摘要副本）
 	if err := besdk.WithTx(ctx, db, "erp_finance_rw", "erp_finance", func(tx *sql.Tx) error {
-		return UpsertCustomerSnapshotTx(tx, customerID, "", "200.00", 1)
+		return UpsertCustomerSnapshotTx(tx, customerID, "", "200.00", 1, nil)
 	}); err != nil {
 		t.Fatal(err)
 	}

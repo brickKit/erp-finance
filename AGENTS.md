@@ -76,6 +76,7 @@ Migrations run as the login role `erp_finance_rw`: `make migrate-idempotent` wit
 | `UPDATE` / `DELETE` a posted entry | Tests may pass; the books no longer match what was reported | Posted is final; correct with `ReverseEntry` (once per entry) |
 | Treat `CheckPeriodOpen` as permission to write | A posting slips through in the moment a period is being closed | It is advisory; the check that counts is inside `postEntryTx` |
 | Parse an amount with `strconv.ParseFloat` | `"NaN"` posts; a one-cent difference on large amounts is accepted as balanced | Use `parseCents` / `NUMERIC` |
+| Store a decimal from another component's event in a `NUMERIC` column without `parseCents` | PostgreSQL stores `NaN`; every later posting that reads the value fails, and the sales-order event behind it is dropped | Validate on ingest; an invalid credit limit is stored as `0` (no limit) with a Warn |
 | Write `"erp_finance"` as a literal schema anywhere | Works here; with another `PG_SCHEMA` events land in the wrong outbox and are never sent | `publish` takes the schema from `current_schema()` |
 | Call a user-facing service method from gRPC or `Start()` | `besdk.ScopeOf` panics (gRPC answers `INTERNAL`) | Only REST requests carry verified claims |
 | Let the next fiscal year go unopened | From 1 January every posting, including every sales-order event, fails with `NotFound` and the event is dropped | Periods and line partitions exist up to FY2027 (`008`); each new year is a migration until an open-fiscal-year operation exists |

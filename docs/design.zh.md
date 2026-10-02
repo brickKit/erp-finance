@@ -101,7 +101,7 @@ REST 前缀 `/erp/finance`，每条路由都带权限键，并按调用者的法
 |---|---|---|
 | `sales.order.created.v1` | `erp/sales` | 应收凭证（借 `1122` / 贷 `6001`）、一行到期日为记账当天的应收、已用额度增加、超限判定 |
 | `erp.inventory.adjusted.v1` | `erp/inventory` | 存货凭证：入库借 `1405` / 贷 `2202`；出库与盘亏借 `6401` / 贷 `1405`；盘盈相反。金额 = 数量绝对值 × 每单位 1 元，是占位 |
-| `mdm.customer.created.v1`、`mdm.customer.updated.v1` | `mdm/customer` | 客户摘要副本（额度、客户名）；只有事件的 version 大于已存的才生效——inbox 只在同一个 subject 内单调，这是两个 subject |
+| `mdm.customer.created.v1`、`mdm.customer.updated.v1` | `mdm/customer` | 客户摘要副本（额度、客户名）；只有事件的 version 大于已存的才生效——inbox 只在同一个 subject 内单调，这是两个 subject。`credit_limit` 不是合法金额（`NaN`、负数、指数写法）时按 `0`（未配置额度）存并记 Warn；过账时读到解析不了的已存值也同样处理，上游的坏值不会挡住应收 |
 
 事件生成的凭证的记账日期是处理它的那一天：事件不带业务日期，期间就按那一天定。上游事件不带法人，它们的凭证记在法人 `default` 名下。
 
