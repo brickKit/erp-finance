@@ -38,3 +38,16 @@ func decodeCursor(s string) (cursorKey, error) {
 	}
 	return cursorKey{CreatedAt: t, ID: id}, nil
 }
+
+// parseCursor 解析列表请求带来的游标；空串表示第一页（返回 nil）。解不开的
+// 游标是调用方的参数错误（400），不是服务端故障。
+func parseCursor(s string) (*cursorKey, error) {
+	if s == "" {
+		return nil, nil
+	}
+	k, err := decodeCursor(s)
+	if err != nil {
+		return nil, fmt.Errorf("%w: 非法 cursor：%v", ErrInvalidArgument, err)
+	}
+	return &k, nil
+}

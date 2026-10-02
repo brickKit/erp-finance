@@ -415,17 +415,13 @@ func buildListQuery(in ListInput) besdk.Query {
 
 func (r *Repo) ListEntries(ctx context.Context, in ListInput) (*ListResult, error) {
 	q := buildListQuery(in)
-	var ck *cursorKey
-	if q.Cursor != "" {
-		decoded, err := decodeCursor(q.Cursor)
-		if err != nil {
-			return nil, fmt.Errorf("非法 cursor：%w", err)
-		}
-		ck = &decoded
+	ck, err := parseCursor(q.Cursor)
+	if err != nil {
+		return nil, err
 	}
 
 	var out ListResult
-	err := besdk.WithTx(ctx, r.db, r.role, r.schema, func(tx *sql.Tx) error {
+	err = besdk.WithTx(ctx, r.db, r.role, r.schema, func(tx *sql.Tx) error {
 		query := `SELECT id FROM finance_journal_entries WHERE created_at >= $1 AND created_at <= $2`
 		args := []any{q.From, q.To}
 		// ⚠️ legal_entity_access 过滤永远加——空/nil 列表让 `= ANY(...)`

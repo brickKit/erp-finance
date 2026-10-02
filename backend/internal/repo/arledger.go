@@ -55,17 +55,13 @@ func (r *Repo) ListARLedger(ctx context.Context, in ListARLedgerInput) (*ListARL
 	q := besdk.ListWindow(besdk.Query{
 		From: in.CreatedAfter, To: in.CreatedBefore, Cursor: in.Cursor, Limit: in.PageSize,
 	})
-	var ck *cursorKey
-	if q.Cursor != "" {
-		decoded, err := decodeCursor(q.Cursor)
-		if err != nil {
-			return nil, fmt.Errorf("非法 cursor：%w", err)
-		}
-		ck = &decoded
+	ck, err := parseCursor(q.Cursor)
+	if err != nil {
+		return nil, err
 	}
 
 	var out ListARLedgerResult
-	err := besdk.WithTx(ctx, r.db, r.role, r.schema, func(tx *sql.Tx) error {
+	err = besdk.WithTx(ctx, r.db, r.role, r.schema, func(tx *sql.Tx) error {
 		query := `SELECT id, customer_id, entry_id, amount, reconciled_amount, created_at
 			FROM ar_ledger WHERE created_at >= $1 AND created_at <= $2`
 		args := []any{q.From, q.To}
