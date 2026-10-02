@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"strconv"
@@ -60,6 +61,10 @@ type postEntryTxInput struct {
 	SourceRevision  int64
 }
 
+// errSourceAlreadyPosted：这张源单（source_component/doc_type/doc_id/revision）已经
+// 过过账。只有自动凭证会遇到，调用方把它当成重复投递安全跳过。
+var errSourceAlreadyPosted = errors.New("源单已过账")
+
 func postEntryTx(ctx context.Context, tx *sql.Tx, in postEntryTxInput) (*Entry, error) {
 	if len(in.Lines) == 0 {
 		return nil, fmt.Errorf("%w: 分录不能没有行", ErrInvalidArgument)
@@ -79,23 +84,37 @@ func postEntryTx(ctx context.Context, tx *sql.Tx, in postEntryTxInput) (*Entry, 
 		return nil, fmt.Errorf("生成 entry_no: %w", err)
 	}
 	entryNoStr := "E-" + entryNo
+
+	// 先认领、后编号：凭证头带着空 post_no 插入，源单唯一约束（只管自动凭证）冲突时
+	// DO NOTHING——同一张源单已经由另一个事务过了账，这里什么都没写，安全返回重复。
+	// 不能"先查有没有、再插"：两个并发事务都查不到，后到的那个插入时撞唯一约束，整个
+	// 事务作废。post_no 在认领成功之后才分配，重复的那次不占号、不留缺口
+	// （entry_no 允许有缺口）。
+	now := time.Now().UTC()
+	err = tx.QueryRowContext(ctx, `
+		INSERT INTO finance_journal_entries
+			(entry_no, period, legal_entity_id, status,
+			 source_component, source_doc_type, source_doc_id, source_revision, memo, posted_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		ON CONFLICT (source_component, source_doc_type, source_doc_id, source_revision)
+			WHERE source_component != '' DO NOTHING
+		RETURNING id`,
+		entryNoStr, period.Period, in.LegalEntityID, EntryPosted,
+		in.SourceComponent, in.SourceDocType, in.SourceDocID, in.SourceRevision, in.Memo, now,
+	).Scan(&entryID)
+	if err == sql.ErrNoRows {
+		return nil, errSourceAlreadyPosted
+	}
+	if err != nil {
+		return nil, fmt.Errorf("写 finance_journal_entries: %w", err)
+	}
 	postNo, err := nextPostNo(ctx, tx, in.LegalEntityID, period)
 	if err != nil {
 		return nil, err
 	}
-
-	now := time.Now().UTC()
-	err = tx.QueryRowContext(ctx, `
-		INSERT INTO finance_journal_entries
-			(entry_no, post_no, period, legal_entity_id, status,
-			 source_component, source_doc_type, source_doc_id, source_revision, memo, posted_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-		RETURNING id`,
-		entryNoStr, postNo, period.Period, in.LegalEntityID, EntryPosted,
-		in.SourceComponent, in.SourceDocType, in.SourceDocID, in.SourceRevision, in.Memo, now,
-	).Scan(&entryID)
-	if err != nil {
-		return nil, fmt.Errorf("写 finance_journal_entries: %w", err)
+	if _, err := tx.ExecContext(ctx,
+		`UPDATE finance_journal_entries SET post_no = $1 WHERE id = $2`, postNo, entryID); err != nil {
+		return nil, fmt.Errorf("写 post_no: %w", err)
 	}
 	entryIDStr := strconv.FormatInt(entryID, 10)
 

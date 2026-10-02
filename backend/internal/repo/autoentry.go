@@ -1,47 +1,30 @@
 // 事件驱动的自动过账：消费 sales.order.created.v1 / erp.inventory.adjusted.v1
-// 生成凭证。幂等靠 (source_component, source_doc_type, source_doc_id,
-// source_revision) 这条唯一约束本身，不经过 command_idempotency
-// （设计计划 §2.3）——调用方是 backend/internal/consumer，不是 gRPC/HTTP。
+// 生成凭证。幂等靠凭证头上 (source_component, source_doc_type, source_doc_id,
+// source_revision) 这条唯一约束，不经过 command_idempotency——调用方是
+// backend/internal/consumer，不是 gRPC/HTTP。
 //
-// ⚠️ 必须先查后插，不能"先插、撞了唯一约束再捕获错误当作重复"：
-// PostgreSQL 里一条语句真的执行失败后，整个事务会被标记成 aborted，
-// 即使 Go 这层选择吞掉这个错误，事务在数据库那侧也回不去了，随后的
-// 任何语句（包括 COMMIT）都会失败（同 mdm-product archive.go 的实测
-// 踩坑）。所以这里先 SELECT 判断"这个源单是不是已经处理过"，判断结果
-// 一致才真的去写。
+// 认领在 postEntryTx 里用 INSERT … ON CONFLICT DO NOTHING 做：冲突时什么都不写、
+// 返回 errSourceAlreadyPosted，这里当成重复安全跳过。不能"先插、撞了唯一约束再
+// 捕获错误"：PostgreSQL 里一条语句失败后整个事务作废，随后的语句（含 COMMIT）
+// 全部失败；也不能"先查有没有、再插"：两个并发事务都查不到。
 //
-// ⚠️ 每个操作都有两个入口：*Tx 版本接一个已经打开的 *sql.Tx（供
-// backend/internal/consumer 在 besdk.Consume 给的事务里直接调用，不能
-// 再开一个 besdk.WithTx——那是两个独立会话，不是同一个事务）；不带
-// Tx 后缀的方法自己开事务，供测试和任何直接调用的场景用。
+// 每个操作都有两个入口：*Tx 版本接一个已经打开的 *sql.Tx（供
+// backend/internal/consumer 在 besdk.Consume 给的事务里直接调用，不能再开一个
+// besdk.WithTx——那是另一个会话，不是同一个事务）；不带 Tx 后缀的方法自己开
+// 事务，供测试和直接调用的场景用。
 package repo
 
 import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
-	"strconv"
 	"time"
 
 	besdk "github.com/brickKit/be-sdk-go"
 )
-
-func findExistingBySource(ctx context.Context, tx *sql.Tx, component, docType, docID string, revision int64) (string, bool, error) {
-	var id int64
-	err := tx.QueryRowContext(ctx, `
-		SELECT id FROM finance_journal_entries
-		WHERE source_component = $1 AND source_doc_type = $2 AND source_doc_id = $3 AND source_revision = $4`,
-		component, docType, docID, revision).Scan(&id)
-	if err == sql.ErrNoRows {
-		return "", false, nil
-	}
-	if err != nil {
-		return "", false, fmt.Errorf("查 finance_journal_entries: %w", err)
-	}
-	return strconv.FormatInt(id, 10), true, nil
-}
 
 const defaultLegalEntityID = "default" // 阶段二只有一个默认法人（设计计划 §1）
 
@@ -68,14 +51,6 @@ func postSalesOrderEntryTx(ctx context.Context, tx *sql.Tx, in SalesOrderEventIn
 		legalEntityID = defaultLegalEntityID
 	}
 
-	_, found, err := findExistingBySource(ctx, tx, "erp-sales", "order", in.OrderID, in.EventVersion)
-	if err != nil {
-		return false, err
-	}
-	if found {
-		return true, nil
-	}
-
 	entry, err := postEntryTx(ctx, tx, postEntryTxInput{
 		LegalEntityID: legalEntityID, BusinessDate: time.Now().UTC(),
 		Lines: []Line{
@@ -85,6 +60,9 @@ func postSalesOrderEntryTx(ctx context.Context, tx *sql.Tx, in SalesOrderEventIn
 		Memo:            "销售订单 " + in.OrderID,
 		SourceComponent: "erp-sales", SourceDocType: "order", SourceDocID: in.OrderID, SourceRevision: in.EventVersion,
 	})
+	if errors.Is(err, errSourceAlreadyPosted) {
+		return true, nil
+	}
 	if err != nil {
 		return false, err
 	}
@@ -198,13 +176,6 @@ func postInventoryAdjustedEntryTx(ctx context.Context, tx *sql.Tx, in InventoryA
 	}
 	debitCode, creditCode := accountsForInventoryReason(in.Reason)
 
-	_, found, err := findExistingBySource(ctx, tx, "erp-inventory", "movement", in.MovementID, in.EventVersion)
-	if err != nil {
-		return false, err
-	}
-	if found {
-		return true, nil
-	}
 	_, err = postEntryTx(ctx, tx, postEntryTxInput{
 		LegalEntityID: legalEntityID, BusinessDate: time.Now().UTC(),
 		Lines: []Line{
@@ -216,6 +187,9 @@ func postInventoryAdjustedEntryTx(ctx context.Context, tx *sql.Tx, in InventoryA
 		SourceComponent: "erp-inventory", SourceDocType: "movement",
 		SourceDocID: in.MovementID, SourceRevision: in.EventVersion,
 	})
+	if errors.Is(err, errSourceAlreadyPosted) {
+		return true, nil
+	}
 	return false, err
 }
 

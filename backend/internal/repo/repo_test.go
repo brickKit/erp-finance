@@ -519,13 +519,15 @@ func TestPostInventoryAdjustedEntry_生成存货凭证且金额是占位换算(t
 }
 
 func findExistingBySourceForTest(ctx context.Context, db *sql.DB, component, docType, docID string, revision int64) (string, bool, error) {
-	var id, found string
-	err := besdk.WithTx(ctx, db, "erp_finance_rw", "erp_finance", func(tx *sql.Tx) error {
-		gotID, gotFound, err := findExistingBySource(ctx, tx, component, docType, docID, revision)
-		id, found = gotID, fmt.Sprint(gotFound)
-		return err
-	})
-	return id, found == "true", err
+	var id string
+	err := db.QueryRowContext(ctx, `
+		SELECT id::text FROM erp_finance.finance_journal_entries
+		WHERE source_component = $1 AND source_doc_type = $2 AND source_doc_id = $3 AND source_revision = $4`,
+		component, docType, docID, revision).Scan(&id)
+	if err == sql.ErrNoRows {
+		return "", false, nil
+	}
+	return id, err == nil, err
 }
 
 func TestPostInventoryAdjustedEntry_qtyDelta为0时不生成凭证(t *testing.T) {
