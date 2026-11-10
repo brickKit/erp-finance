@@ -27,6 +27,7 @@
 | `claims_integration_test.go` | `claims` | 作为 `erp/payment` 调系统面：认领、同一认领再来、不同数量冲突、超出可用余额、别的组件被拒、应收不能认领；续期、确认、确认后不能续期；释放与重复释放；不认识的认领；到期退回数量（期限 4 秒）、续期过的到原期限不到期；使用方释放已确认的；到期未清项的分页、可用为零的不出现 | CL01–CL06、CL08 | `claims` |
 | `settlement_integration_test.go` | `settlement` | 收付款的替身发布资金事实：同一到账发两次只核销一次、最早到期先分、跨法人与外币的不分；剩余形成客户贷方余额；退款与付款按已确认的认领正式化；不认识与未确认的认领不分配；付款冲正（重复的只一次）、到账冲正（应收重开）、冲正先于原事实到达；没有应收的伙伴的到账成为贷方余额、冲正后作废；不知道付款方的到账记暂挂 | ST02–ST05、CL07、CL09 | `settlement`、`claims`、`intake` |
 | `accountingfacts_integration_test.go` | `accountingFacts` | 收付款的替身发布会计事实：没映射的规则等着、映射后过账（部门与伙伴在每行）；美元按汇率快照、关闭月份的顺延；目录里没有的规则键等着；借贷不平的不过账 | AF01、AF02、PD01 | `intake`、`ledger` |
+| `manualitems_integration_test.go` | `manualItems` | 登记的拒绝（非末级的对方科目、外币、暂停的伙伴）；待批准的不能认领；登记人不能批准、版本不对、没映射时被拒；另一人批准：凭证、应收已形成；应付批准后能认领；取消与重复取消、取消的不能批准、已批准的不能取消 | MI01–MI03 | `manualitems`、`openitems` |
 
 共用的：
 
@@ -45,6 +46,7 @@
 | `supplierinvoices_integration_test.go` | `siBody`、`si`、`siUpdate`、`siAction`、`siRefused`、`noFact` |
 | `claims_integration_test.go` | `claimClient`（作为某个组件调 `ClaimService`）、`claim`、`claimRefused`、`claimReason` |
 | `accountingfacts_integration_test.go` | 收付款的替身 `accounting`（按共享契约的会计事实） |
+| `manualitems_integration_test.go` | `manual`、`manualAction` |
 | `settlement_integration_test.go` | 收付款的替身 `fund`（按共享契约的资金事实，发布用 `publishFact`）；`posted`、`receivedState`、`countFacts`、`assertLines` |
 
 ## 加测试

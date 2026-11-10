@@ -17,6 +17,9 @@ var Rules = map[string]map[string]string{
 	"payment": {"payable": "debit", "bank": "credit"},
 	// money paid back to a customer against its credit balance
 	"refund": {"receivable": "debit", "bank": "credit"},
+	// a manual open item approved (MI02): the receivable or the payable mapped, the counter account the one registered
+	"manual_receivable": {"receivable": "debit", "counter": "credit"},
+	"manual_payable":    {"counter": "debit", "payable": "credit"},
 	// erp/payment's accounting facts (AF02): money moved between the company's accounts, a bank's charges, its interest
 	"fund_transfer": {"bank_in": "debit", "bank_out": "credit"},
 	"bank_charge":   {"expense": "debit", "bank": "credit"},

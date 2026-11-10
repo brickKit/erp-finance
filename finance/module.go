@@ -9,6 +9,7 @@ import (
 	core "github.com/brickKit/erp-finance/v3/internal/core"
 	intake "github.com/brickKit/erp-finance/v3/internal/intake"
 	ledger "github.com/brickKit/erp-finance/v3/internal/ledger"
+	manualitems "github.com/brickKit/erp-finance/v3/internal/manualitems"
 	openitems "github.com/brickKit/erp-finance/v3/internal/openitems"
 	orgunits "github.com/brickKit/erp-finance/v3/internal/orgunits"
 	periods "github.com/brickKit/erp-finance/v3/internal/periods"
@@ -50,7 +51,6 @@ func (m *Module) Routes(r *httpx.Routes) error {
 	h := func(f func(*core.Base, *httpx.Context) error) httpx.Handler {
 		return func(c *httpx.Context) error { return f(m.b, c) }
 	}
-	todo := core.Unsupported("this route")
 	add("GET", "/api/finance/accounts", core.OpAccountRead, h(ledger.ListAccounts))                                                                         // listAccounts
 	add("POST", "/api/finance/accounts", core.OpAccountManage, h(ledger.CreateAccount))                                                                     // createAccount
 	add("GET", "/api/finance/accounts/:id", core.OpAccountRead, h(ledger.GetAccount))                                                                       // getAccount
@@ -71,10 +71,10 @@ func (m *Module) Routes(r *httpx.Routes) error {
 	add("POST", "/api/finance/vouchers/:id/reverse", core.OpVoucherApprove, vouchers.Action(m.b, vouchers.Reverse))                                         // reverseVoucher
 	add("GET", "/api/finance/balances", core.OpVoucherRead, h(ledger.ListBalances))                                                                         // listBalances
 	add("GET", "/api/finance/open-items", core.OpOpenItemRead, h(openitems.ListOpenItems))                                                                  // listOpenItems
-	add("POST", "/api/finance/open-items", core.OpOpenItemEdit, todo)                                                                                       // createOpenItem
+	add("POST", "/api/finance/open-items", core.OpOpenItemEdit, h(manualitems.CreateOpenItem))                                                              // createOpenItem
 	add("GET", "/api/finance/open-items/:id", core.OpOpenItemRead, h(openitems.GetOpenItem))                                                                // getOpenItem
-	add("POST", "/api/finance/open-items/:id/approve", core.OpOpenItemApprove, todo)                                                                        // approveOpenItem
-	add("POST", "/api/finance/open-items/:id/cancel", core.OpOpenItemEdit, todo)                                                                            // cancelOpenItem
+	add("POST", "/api/finance/open-items/:id/approve", core.OpOpenItemApprove, manualitems.Action(m.b, manualitems.Approve))                                // approveOpenItem
+	add("POST", "/api/finance/open-items/:id/cancel", core.OpOpenItemEdit, manualitems.Action(m.b, manualitems.Cancel))                                     // cancelOpenItem
 	add("GET", "/api/finance/supplier-invoices", core.OpSupplierInvRead, h(supplierinvoices.ListSupplierInvoices))                                          // listSupplierInvoices
 	add("POST", "/api/finance/supplier-invoices", core.OpSupplierInvEdit, h(supplierinvoices.CreateSupplierInvoice))                                        // createSupplierInvoice
 	add("GET", "/api/finance/supplier-invoices/:id", core.OpSupplierInvRead, h(supplierinvoices.GetSupplierInvoice))                                        // getSupplierInvoice

@@ -152,6 +152,10 @@ CREATE TABLE open_item (
     department_id   uuid,
     department_path text,
     voucher_id      uuid REFERENCES voucher (id),
+    -- a manual open item's (MI01): who registered it, why, the other side of its voucher
+    maker_id             text,
+    description          text,
+    counter_account_code text,
     search          text NOT NULL DEFAULT '',
     search_version  int NOT NULL DEFAULT 0,
     version         bigint NOT NULL DEFAULT 1,

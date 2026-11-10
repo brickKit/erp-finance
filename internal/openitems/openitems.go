@@ -29,33 +29,57 @@ type New struct {
 	VoucherID      string
 	DepartmentID   *string
 	DepartmentPath *string
+	// a manual open item (MI01): registered waiting for approval, by MakerID, with its description and counter account
+	State              string
+	MakerID            *string
+	Description        *string
+	CounterAccountCode *string
 	// OrderID is the sales order an invoice's receivable belongs to (erp/credit's branch), carried by the fact
 	OrderID *string
 }
 
-// Form makes an open item in tx and, for a receivable, publishes erp.receivable.formed.v1 (protocol 05 step 2;
-// the fact's ID is the open item's).
+// Form makes an open item in tx and, for an open receivable, publishes erp.receivable.formed.v1 (Formed).
 func Form(m *core.Base, ctx context.Context, tx db.Tx, n New) (OpenItem, error) {
+	state := n.State
+	if state == "" {
+		state = "open"
+	}
 	id := ids.New().String()
 	number := ""
 	if n.Source.Number != nil {
 		number = *n.Source.Number
 	}
 	if _, err := tx.Exec(ctx, `INSERT INTO open_item (id, legal_entity_id, kind, partner_id, currency, amount, due_date,
-		origin, source_kind, source_id, source_number, voucher_id, search, search_version, department_id, department_path)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`, id, n.LegalEntityID, n.Kind,
-		n.PartnerID, n.Currency, n.Amount, n.DueDate, n.Origin, n.Source.Kind, n.Source.ID, n.Source.Number, n.VoucherID,
-		search.Text(number), search.Version, n.DepartmentID, n.DepartmentPath); err != nil {
+		origin, source_kind, source_id, source_number, voucher_id, search, search_version, department_id, department_path,
+		state, maker_id, description, counter_account_code) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
+		nullif($12, '')::uuid, $13, $14, $15, $16, $17, $18, $19, $20)`, id, n.LegalEntityID, n.Kind, n.PartnerID,
+		n.Currency, n.Amount, n.DueDate, n.Origin, n.Source.Kind, n.Source.ID, n.Source.Number, n.VoucherID,
+		search.Text(number), search.Version, n.DepartmentID, n.DepartmentPath, state, n.MakerID, n.Description,
+		n.CounterAccountCode); err != nil {
 		return OpenItem{}, err
 	}
 	o, err := Get(ctx, tx, id, false)
-	if err != nil || n.Kind != "receivable" {
+	if err != nil || state != "open" {
 		return o, err
 	}
-	return o, core.Fact(m, ctx, tx, core.ReceivableFormed, id, n.LegalEntityID, map[string]any{
-		"fact_id": id, "legal_entity_id": n.LegalEntityID, "customer_id": n.PartnerID, "invoice_id": n.Source.ID,
-		"invoice_number": n.Source.Number, "order_id": n.OrderID, "currency": n.Currency, "amount": o.Amount,
-		"due_date": n.DueDate, "recorded_at": canon.Time(time.Now())})
+	return o, Formed(m, ctx, tx, o, n.OrderID)
+}
+
+// Formed publishes erp.receivable.formed.v1 for an open receivable (protocol 05 step 2; the fact's ID is the open
+// item's): when it is formed, or when a manual one is approved (MI02). Not a receivable: nothing. invoice_id is the
+// source's when the source is an invoice.
+func Formed(m *core.Base, ctx context.Context, tx db.Tx, o OpenItem, orderID *string) error {
+	if o.Kind != "receivable" {
+		return nil
+	}
+	var invoice, number *string
+	if o.Source.Kind == "invoice" {
+		invoice, number = o.Source.ID, o.Source.Number
+	}
+	return core.Fact(m, ctx, tx, core.ReceivableFormed, o.ID, o.LegalEntityID, map[string]any{
+		"fact_id": o.ID, "legal_entity_id": o.LegalEntityID, "customer_id": o.PartnerID, "invoice_id": invoice,
+		"invoice_number": number, "order_id": orderID, "currency": o.Currency, "amount": o.Amount,
+		"due_date": o.DueDate, "recorded_at": canon.Time(time.Now())})
 }
 
 func GetOpenItem(m *core.Base, c *httpx.Context) error {
