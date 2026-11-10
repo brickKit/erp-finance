@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://brickkit.dev/erp-finance/events/erp.voucher.posted.v1.schema.json",
+  "title": "erp.voucher.posted.v1",
+  "description": "A voucher was posted (an incremental fact; fact_id is the voucher's ID). For reports and budgets later.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "fact_id",
+    "legal_entity_id",
+    "number",
+    "period",
+    "business_date",
+    "posting_date",
+    "source",
+    "reverses_voucher_id",
+    "lines",
+    "recorded_at"
+  ],
+  "properties": {
+    "fact_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "legal_entity_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "number": {
+      "type": "string"
+    },
+    "period": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}$"
+    },
+    "business_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "posting_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "id"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "description": "a fact's rule key, or manual"
+        },
+        "id": {
+          "type": "string"
+        }
+      }
+    },
+    "reverses_voucher_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "uuid"
+    },
+    "lines": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "account_code",
+          "side",
+          "currency",
+          "amount",
+          "base_amount",
+          "partner_id",
+          "department_id"
+        ],
+        "properties": {
+          "account_code": {
+            "type": "string"
+          },
+          "side": {
+            "enum": [
+              "debit",
+              "credit"
+            ]
+          },
+          "currency": {
+            "type": "string",
+            "pattern": "^[A-Z]{3}$"
+          },
+          "amount": {
+            "type": "string",
+            "pattern": "^[0-9]+(\\.[0-9]+)?$"
+          },
+          "base_amount": {
+            "type": "string",
+            "pattern": "^[0-9]+(\\.[0-9]+)?$"
+          },
+          "partner_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "department_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          }
+        }
+      }
+    },
+    "recorded_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

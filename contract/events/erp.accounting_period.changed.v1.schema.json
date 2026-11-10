@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://brickkit.dev/erp-finance/events/erp.accounting_period.changed.v1.schema.json",
+  "title": "erp.accounting_period.changed.v1",
+  "description": "An accounting period's full state (overwriting); the record is <legal entity>/<YYYY-MM>.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "legal_entity_id",
+    "period",
+    "state",
+    "revision",
+    "reason",
+    "version",
+    "updated_at"
+  ],
+  "properties": {
+    "legal_entity_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "period": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}$"
+    },
+    "state": {
+      "enum": [
+        "open",
+        "closed",
+        "reopened"
+      ]
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "reason": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

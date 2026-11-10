@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://brickkit.dev/erp-finance/events/erp.receivable.reopened.v1.schema.json",
+  "title": "erp.receivable.reopened.v1",
+  "description": "A settled receivable is open again (a fund fact was reversed); protocol 05, carried with the invoice for erp/credit; an incremental fact (fact_id made in the transaction that did it).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "fact_id",
+    "legal_entity_id",
+    "customer_id",
+    "open_item_id",
+    "invoice_id",
+    "currency",
+    "amount",
+    "open_balance",
+    "recorded_at"
+  ],
+  "properties": {
+    "fact_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "legal_entity_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "customer_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "open_item_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "invoice_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "uuid"
+    },
+    "currency": {
+      "type": "string",
+      "pattern": "^[A-Z]{3}$"
+    },
+    "amount": {
+      "type": "string",
+      "pattern": "^[0-9]+(\\.[0-9]+)?$"
+    },
+    "open_balance": {
+      "type": "string",
+      "pattern": "^[0-9]+(\\.[0-9]+)?$"
+    },
+    "recorded_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

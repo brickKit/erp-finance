@@ -1,0 +1,149 @@
+// The system surface of erp/finance: the payment claims erp/payment makes on finance's open items before it pays
+// (protocol 05's claim pattern, the payment use) with the due open items its payment proposals read, and the read of
+// this component's incremental facts by identity (protocol 05's common rules). Callers use their service identity; it
+// never filters by a user. Amounts are decimal strings (protocol 14), never floats. The user surface is REST
+// (../../../../../openapi.yaml); the event payloads and the shared accounting fact contract are ../../../../../events/.
+syntax = "proto3";
+
+package be.erp.finance.v3;
+
+option go_package = "github.com/brickKit/erp-finance/contract/v3/gen/go/be/erp/finance/v3;financev3";
+
+// ClaimService is the payment use of the claim pattern: the claimant is erp/payment, the quota an open item's
+// available balance (amount − settled − pay_claimed). Formalizing and reversing happen in finance's own transaction
+// when the fund fact carrying the claim's ID arrives; they are not calls. A refusal answers FAILED_PRECONDITION with
+// the reason CLAIM_EXCEEDS_AVAILABLE, CLAIM_CONFLICT or CLAIM_STATE.
+service ClaimService {
+  // Claim takes amount of an open item's available balance; idempotent by claim_id (the same amount answers the same
+  // claim, another amount is CLAIM_CONFLICT).
+  rpc Claim(ClaimRequest) returns (ClaimResponse);
+  // Renew extends a pending claim's expiry.
+  rpc Renew(RenewRequest) returns (RenewResponse);
+  // Confirm is sent before the payment's irreversible act; a confirmed claim no longer expires.
+  rpc Confirm(ConfirmRequest) returns (ConfirmResponse);
+  // Release gives a pending or confirmed claim back (a repeated release succeeds).
+  rpc Release(ReleaseRequest) returns (ReleaseResponse);
+  // Get answers a claim as it stands (an unknown claim is NOT_FOUND).
+  rpc Get(GetRequest) returns (GetResponse);
+  // DueItems answers the open items due on or before a date, for the payment proposals (read only).
+  rpc DueItems(DueItemsRequest) returns (DueItemsResponse);
+}
+
+// FactService reads this component's incremental facts by identity; at most 500 a call.
+service FactService {
+  rpc Read(ReadRequest) returns (ReadResponse);
+}
+
+message ClaimRequest {
+  // made by the claimant
+  string claim_id = 1;
+  string open_item_id = 2;
+  // in the open item's currency
+  string amount = 3;
+}
+
+message RenewRequest {
+  string claim_id = 1;
+}
+
+message RenewResponse {
+  Claim claim = 1;
+}
+
+message ConfirmRequest {
+  string claim_id = 1;
+}
+
+message ConfirmResponse {
+  Claim claim = 1;
+}
+
+message ReleaseRequest {
+  string claim_id = 1;
+}
+
+message ReleaseResponse {
+  Claim claim = 1;
+}
+
+message GetRequest {
+  string claim_id = 1;
+}
+
+message GetResponse {
+  Claim claim = 1;
+}
+
+message Claim {
+  string claim_id = 1;
+  string open_item_id = 2;
+  string amount = 3;
+  // pending, confirmed, formalized, expired, released
+  string state = 4;
+  // RFC 3339; pending only
+  string expires_at = 5;
+  string formalized_amount = 6;
+  string reversed_amount = 7;
+}
+
+message ClaimResponse {
+  Claim claim = 1;
+}
+
+// OpenItem is a receivable, a payable or a customer's credit balance.
+message OpenItem {
+  string id = 1;
+  // receivable, payable, credit_balance
+  string kind = 2;
+  string legal_entity_id = 3;
+  string partner_id = 4;
+  string currency = 5;
+  string amount = 6;
+  string settled = 7;
+  string pay_claimed = 8;
+  // amount − settled − pay_claimed
+  string available = 9;
+  // YYYY-MM-DD
+  string due_date = 10;
+  // e.g. supplier_invoice, invoice, manual
+  string source_kind = 11;
+  string source_id = 12;
+  string source_number = 13;
+}
+
+message DueItemsRequest {
+  string legal_entity_id = 1;
+  // payable or credit_balance; empty: both
+  string kind = 2;
+  // empty: every partner
+  string partner_id = 3;
+  // YYYY-MM-DD
+  string due_on_or_before = 4;
+  string cursor = 5;
+  // at most 200; 0: 50
+  int32 limit = 6;
+}
+
+message DueItemsResponse {
+  // with an available balance above zero, earliest due first
+  repeated OpenItem items = 1;
+  string next_cursor = 2;
+}
+
+message ReadRequest {
+  repeated string fact_ids = 1;
+}
+
+// Fact is one incremental fact as its event carried it.
+message Fact {
+  string fact_id = 1;
+  // the event type, e.g. erp.receivable.formed.v1; empty when no such fact
+  string type = 2;
+  // the event payload (JSON, the event's schema)
+  bytes data = 3;
+}
+
+message ReadResponse {
+  // in the order asked; a fact unknown here has an empty type
+  repeated Fact facts = 1;
+}

@@ -1,0 +1,177 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://brickkit.dev/erp-finance/events/accounting_fact.v1.schema.json",
+  "title": "accounting_fact.v1",
+  "description": "The shared accounting fact contract (protocol 05): a source component publishes it on its own stream under its own event type (<domain>.<source>.accounting_fact.v1, e.g. erp.costing.accounting_fact.v1) and erp/finance posts it by the rule and the legal entity's mapping. An incremental fact that must not be missed: fact_id is made by the source in its business transaction; finance dedupes by fact_id and content digest.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "fact_id",
+    "source",
+    "legal_entity_id",
+    "business_date",
+    "posting_date",
+    "rule_key",
+    "currency",
+    "exchange_rate",
+    "amounts",
+    "partner_id",
+    "dimensions",
+    "service_period",
+    "recorded_at"
+  ],
+  "properties": {
+    "fact_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "component",
+        "document_type",
+        "document_id",
+        "document_number"
+      ],
+      "properties": {
+        "component": {
+          "type": "string"
+        },
+        "document_type": {
+          "type": "string"
+        },
+        "document_id": {
+          "type": "string"
+        },
+        "document_number": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "legal_entity_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "business_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "posting_date": {
+      "type": "string",
+      "format": "date",
+      "description": "usually the business date; a late fact's is moved by its source to the next open period (protocol 06)"
+    },
+    "rule_key": {
+      "type": "string",
+      "description": "the posting rule; the source never names accounts"
+    },
+    "currency": {
+      "type": "string",
+      "pattern": "^[A-Z]{3}$"
+    },
+    "exchange_rate": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "rate",
+            "date",
+            "type"
+          ],
+          "properties": {
+            "rate": {
+              "type": "string",
+              "pattern": "^[0-9]+(\\.[0-9]+)?$"
+            },
+            "date": {
+              "type": "string",
+              "format": "date"
+            },
+            "type": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "the rate snapshot to the legal entity's base currency; null in the base currency"
+    },
+    "amounts": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^-?[0-9]+(\\.[0-9]+)?$"
+      },
+      "description": "role -> amount in the currency (e.g. inventory, cost_of_sales); the rule maps each role to a side and the legal entity maps it to an account"
+    },
+    "partner_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "uuid"
+    },
+    "dimensions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "department_id"
+      ],
+      "properties": {
+        "department_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid"
+        },
+        "project_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "later (prj/project)"
+        }
+      },
+      "description": "the analysis dimensions; their values are the owners' identities (protocol 05)"
+    },
+    "service_period": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "from",
+            "to"
+          ],
+          "properties": {
+            "from": {
+              "type": "string",
+              "format": "date"
+            },
+            "to": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "later: deferrals"
+    },
+    "recorded_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://brickkit.dev/erp-finance/events/erp.receivable.formed.v1.schema.json",
+  "title": "erp.receivable.formed.v1",
+  "description": "A receivable was formed from an issued invoice or registered by hand (protocol 05: the receivable's formation; fact_id is the open item's ID).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "fact_id",
+    "legal_entity_id",
+    "customer_id",
+    "invoice_id",
+    "invoice_number",
+    "order_id",
+    "currency",
+    "amount",
+    "due_date",
+    "recorded_at"
+  ],
+  "properties": {
+    "fact_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "legal_entity_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "customer_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "invoice_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "uuid"
+    },
+    "invoice_number": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "order_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "uuid"
+    },
+    "currency": {
+      "type": "string",
+      "pattern": "^[A-Z]{3}$"
+    },
+    "amount": {
+      "type": "string",
+      "pattern": "^[0-9]+(\\.[0-9]+)?$"
+    },
+    "due_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "recorded_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

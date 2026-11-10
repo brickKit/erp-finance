@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://brickkit.dev/erp-finance/events/erp.supplier_invoice.price_confirmed.v1.schema.json",
+  "title": "erp.supplier_invoice.price_confirmed.v1",
+  "description": "A supplier invoice line's price is confirmed against the receipt movements it matched (protocol 05's supplier invoices, defined only here; erp/costing replaces the provisional price, protocol 05b). fact_id is the invoice line's ID.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "fact_id",
+    "invoice_id",
+    "legal_entity_id",
+    "supplier_id",
+    "order_id",
+    "order_line_id",
+    "movements",
+    "unit_price",
+    "currency",
+    "price_basis",
+    "recorded_at"
+  ],
+  "properties": {
+    "fact_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "invoice_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "legal_entity_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "supplier_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "order_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "order_line_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "movements": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "movement_id",
+          "receipt_line_id",
+          "base_quantity"
+        ],
+        "properties": {
+          "movement_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "receipt_line_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "base_quantity": {
+            "type": "string",
+            "pattern": "^[0-9]+(\\.[0-9]+)?$"
+          }
+        }
+      }
+    },
+    "unit_price": {
+      "type": "string",
+      "pattern": "^[0-9]+(\\.[0-9]+)?$",
+      "description": "net of tax, per base unit"
+    },
+    "currency": {
+      "type": "string",
+      "pattern": "^[A-Z]{3}$"
+    },
+    "price_basis": {
+      "enum": [
+        "net_of_tax"
+      ]
+    },
+    "recorded_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://brickkit.dev/erp-finance/events/erp.supplier_invoice.price_reversed.v1.schema.json",
+  "title": "erp.supplier_invoice.price_reversed.v1",
+  "description": "A confirmed supplier invoice price is reversed (the invoice was corrected); fact_id made in that transaction.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "fact_id",
+    "confirmed_fact_id",
+    "invoice_id",
+    "reason",
+    "recorded_at"
+  ],
+  "properties": {
+    "fact_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "confirmed_fact_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "invoice_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "reason": {
+      "type": "string"
+    },
+    "recorded_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

@@ -1,0 +1,219 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://brickkit.dev/erp-finance/events/fund_fact.v1.schema.json",
+  "title": "fund_fact.v1",
+  "description": "The shared fund fact contract (protocol 05), a kind of accounting fact: money received, paid, refunded or reversed, published by erp/payment on its own stream (erp.payment.fund_fact.v1) for erp/finance to post and settle. fact_id is made by the source; finance dedupes by fact_id and content digest.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "fact_id",
+    "source",
+    "legal_entity_id",
+    "business_date",
+    "posting_date",
+    "rule_key",
+    "currency",
+    "exchange_rate",
+    "dimensions",
+    "recorded_at",
+    "kind",
+    "partner_id",
+    "company_account_id",
+    "amount",
+    "order_ref",
+    "claims",
+    "reverses_fact_id"
+  ],
+  "properties": {
+    "fact_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "component",
+        "document_type",
+        "document_id",
+        "document_number"
+      ],
+      "properties": {
+        "component": {
+          "type": "string"
+        },
+        "document_type": {
+          "type": "string"
+        },
+        "document_id": {
+          "type": "string"
+        },
+        "document_number": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "legal_entity_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "business_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "posting_date": {
+      "type": "string",
+      "format": "date",
+      "description": "usually the business date; a late fact's is moved by its source to the next open period (protocol 06)"
+    },
+    "rule_key": {
+      "type": "string",
+      "description": "the posting rule; the source never names accounts"
+    },
+    "currency": {
+      "type": "string",
+      "pattern": "^[A-Z]{3}$"
+    },
+    "exchange_rate": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "rate",
+            "date",
+            "type"
+          ],
+          "properties": {
+            "rate": {
+              "type": "string",
+              "pattern": "^[0-9]+(\\.[0-9]+)?$"
+            },
+            "date": {
+              "type": "string",
+              "format": "date"
+            },
+            "type": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "the rate snapshot to the legal entity's base currency; null in the base currency"
+    },
+    "dimensions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "department_id"
+      ],
+      "properties": {
+        "department_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid"
+        },
+        "project_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "later (prj/project)"
+        }
+      },
+      "description": "the analysis dimensions; their values are the owners' identities (protocol 05)"
+    },
+    "recorded_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "kind": {
+      "enum": [
+        "receipt",
+        "payment",
+        "refund",
+        "reversal"
+      ]
+    },
+    "partner_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "uuid"
+    },
+    "company_account_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "amount": {
+      "type": "string",
+      "pattern": "^[0-9]+(\\.[0-9]+)?$"
+    },
+    "order_ref": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "id"
+          ],
+          "properties": {
+            "kind": {
+              "enum": [
+                "sales_order",
+                "purchase_order"
+              ]
+            },
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "a receipt with an order reference is that order's prepayment"
+    },
+    "claims": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "claim_id",
+          "amount"
+        ],
+        "properties": {
+          "claim_id": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "string",
+            "pattern": "^[0-9]+(\\.[0-9]+)?$"
+          }
+        }
+      },
+      "description": "payments and refunds only: the payment claims this money settles (protocol 05's payment claims)"
+    },
+    "reverses_fact_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "uuid",
+      "description": "a reversal: the fund fact it reverses"
+    }
+  }
+}

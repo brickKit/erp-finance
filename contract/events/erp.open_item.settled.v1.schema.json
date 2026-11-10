@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://brickkit.dev/erp-finance/events/erp.open_item.settled.v1.schema.json",
+  "title": "erp.open_item.settled.v1",
+  "description": "Money was allocated to an open item, or an allocation was reversed (protocol 05's settlement; fact_id is the allocation's ID).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "fact_id",
+    "legal_entity_id",
+    "fund_fact_id",
+    "open_item_id",
+    "kind",
+    "partner_id",
+    "currency",
+    "amount",
+    "direction",
+    "claim_id",
+    "recorded_at"
+  ],
+  "properties": {
+    "fact_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "legal_entity_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "fund_fact_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "open_item_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "kind": {
+      "enum": [
+        "receivable",
+        "payable",
+        "credit_balance"
+      ]
+    },
+    "partner_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "currency": {
+      "type": "string",
+      "pattern": "^[A-Z]{3}$"
+    },
+    "amount": {
+      "type": "string",
+      "pattern": "^[0-9]+(\\.[0-9]+)?$"
+    },
+    "direction": {
+      "enum": [
+        "settle",
+        "reverse"
+      ]
+    },
+    "claim_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "recorded_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

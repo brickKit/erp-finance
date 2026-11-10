@@ -1,0 +1,389 @@
+openapi: 3.1.0
+info:
+  title: erp/finance user surface
+  version: 3.0.0
+  description: >-
+    One ledger per legal entity (D51): the chart of accounts, posting rules and the legal entity's account mapping,
+    accounting periods, vouchers (system vouchers posted from facts, manual vouchers by approval), open items
+    (receivables from issued invoices, payables from supplier invoices, manual ones by approval) and supplier invoices
+    matched against purchase orders (D50), for people and the front end. Every route needs a platform access token and
+    the operation in x-operation; what the caller may not see answers 404 (vouchers, periods, open items and supplier
+    invoices carry the legal entity dimension, open items and supplier invoices the department too). Errors are
+    application/problem+json with a reason. Lists page by cursor only (protocol 14). Amounts are decimal strings.
+    Closing batches, prepayments and release ledgers, revaluation and deferrals are in the contract but not in this
+    version: they answer CAPABILITY_UNSUPPORTED (D75). The payment claims and the read of the incremental facts are on
+    the system surface (proto); the shared accounting fact contract is events/shared/.
+paths:
+  /api/finance/accounts:
+    get:
+      operationId: listAccounts
+      x-operation: erp.finance.account.read
+      parameters:
+        - {name: legal_entity_id, in: query, required: true, schema: {type: string, format: uuid}}
+        - {name: category, in: query, schema: {enum: [asset, liability, equity, income, expense]}}
+        - {name: q, in: query, schema: {type: string}, description: the code or the name}
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+      responses:
+        '200': {description: one page by code, content: {application/json: {schema: {type: object, required: [accounts, next_cursor], properties: {accounts: {type: array, items: {$ref: '#/components/schemas/Account'}}, next_cursor: {type: string}}}}}}
+        default: {$ref: '#/components/responses/problem'}
+    post: {operationId: createAccount, x-operation: erp.finance.account.manage, summary: An account of a legal entity's chart (Idempotency-Key), requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/AccountIn'}}}}, responses: {'200': {description: the account, content: {application/json: {schema: {$ref: '#/components/schemas/Account'}}}}, default: {$ref: '#/components/responses/problem'}}}
+  /api/finance/accounts/{id}:
+    parameters: [{$ref: '#/components/parameters/id'}]
+    get: {operationId: getAccount, x-operation: erp.finance.account.read, responses: {'200': {description: the account, content: {application/json: {schema: {$ref: '#/components/schemas/Account'}}}}, default: {$ref: '#/components/responses/problem'}}}
+    patch: {operationId: updateAccount, x-operation: erp.finance.account.manage, summary: 'The name, the state; by version', requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/AccountPatch'}}}}, responses: {'200': {description: the account, content: {application/json: {schema: {$ref: '#/components/schemas/Account'}}}}, default: {$ref: '#/components/responses/problem'}}}
+  /api/finance/posting-rules:
+    get: {operationId: listPostingRules, x-operation: erp.finance.account.read, summary: The posting rules (rule key and each role's side), responses: {'200': {description: every rule, content: {application/json: {schema: {type: object, required: [rules], properties: {rules: {type: array, items: {$ref: '#/components/schemas/PostingRule'}}}}}}}, default: {$ref: '#/components/responses/problem'}}}
+  /api/finance/account-mappings/{legal_entity_id}:
+    parameters: [{name: legal_entity_id, in: path, required: true, schema: {type: string, format: uuid}}]
+    get: {operationId: getMapping, x-operation: erp.finance.account.read, responses: {'200': {description: the legal entity's mapping, content: {application/json: {schema: {$ref: '#/components/schemas/Mapping'}}}}, default: {$ref: '#/components/responses/problem'}}}
+    put: {operationId: putMapping, x-operation: erp.finance.account.manage, summary: 'Set the mapping of rule key and role to accounts, by version', requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/Mapping'}}}}, responses: {'200': {description: the mapping, content: {application/json: {schema: {$ref: '#/components/schemas/Mapping'}}}}, default: {$ref: '#/components/responses/problem'}}}
+  /api/finance/periods:
+    get:
+      operationId: listPeriods
+      x-operation: erp.finance.period.read
+      parameters:
+        - {name: legal_entity_id, in: query, required: true, schema: {type: string, format: uuid}}
+        - {name: year, in: query, schema: {type: integer}}
+      responses:
+        '200': {description: the legal entity's periods, content: {application/json: {schema: {type: object, required: [periods], properties: {periods: {type: array, items: {$ref: '#/components/schemas/Period'}}}}}}}
+        default: {$ref: '#/components/responses/problem'}
+  /api/finance/periods/{legal_entity_id}/{period}/close:
+    parameters: [{name: legal_entity_id, in: path, required: true, schema: {type: string, format: uuid}}, {name: period, in: path, required: true, schema: {type: string, pattern: '^[0-9]{4}-[0-9]{2}$'}}]
+    post: {operationId: closePeriod, x-operation: erp.finance.period.close, summary: 'Close a period (PD02): no manual voucher waiting, the earlier periods closed', responses: {'200': {description: the period, content: {application/json: {schema: {$ref: '#/components/schemas/Period'}}}}, default: {$ref: '#/components/responses/problem'}}}
+  /api/finance/periods/{legal_entity_id}/{period}/reopen:
+    parameters: [{name: legal_entity_id, in: path, required: true, schema: {type: string, format: uuid}}, {name: period, in: path, required: true, schema: {type: string, pattern: '^[0-9]{4}-[0-9]{2}$'}}]
+    post: {operationId: reopenPeriod, x-operation: erp.finance.period.close, summary: 'Reopen a closed period with a reason (PD02)', requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/Reason'}}}}, responses: {'200': {description: the period, content: {application/json: {schema: {$ref: '#/components/schemas/Period'}}}}, default: {$ref: '#/components/responses/problem'}}}
+  /api/finance/closings:
+    post: {operationId: createClosing, x-operation: erp.finance.period.close, summary: 'A closing batch with its participants (protocol 06); not in this version: CAPABILITY_UNSUPPORTED', responses: {default: {$ref: '#/components/responses/problem'}}}
+  /api/finance/vouchers:
+    get:
+      operationId: listVouchers
+      x-operation: erp.finance.voucher.read
+      parameters:
+        - {name: legal_entity_id, in: query, schema: {type: string, format: uuid}}
+        - {name: period, in: query, schema: {type: string, pattern: '^[0-9]{4}-[0-9]{2}$'}}
+        - {name: state, in: query, schema: {enum: [draft, submitted, posted, reversed]}}
+        - {name: q, in: query, schema: {type: string}, description: the number}
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+      responses:
+        '200': {description: one page, newest first, content: {application/json: {schema: {type: object, required: [vouchers, next_cursor], properties: {vouchers: {type: array, items: {$ref: '#/components/schemas/Voucher'}}, next_cursor: {type: string}}}}}}
+        default: {$ref: '#/components/responses/problem'}
+    post: {operationId: createVoucher, x-operation: erp.finance.voucher.edit, summary: 'A manual voucher draft (Idempotency-Key; VC01)', requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/VoucherIn'}}}}, responses: {'200': {description: the voucher, content: {application/json: {schema: {$ref: '#/components/schemas/Voucher'}}}}, default: {$ref: '#/components/responses/problem'}}}
+  /api/finance/vouchers/{id}:
+    parameters: [{$ref: '#/components/parameters/id'}]
+    get: {operationId: getVoucher, x-operation: erp.finance.voucher.read, responses: {'200': {description: the voucher, content: {application/json: {schema: {$ref: '#/components/schemas/Voucher'}}}}, default: {$ref: '#/components/responses/problem'}}}
+    patch: {operationId: updateVoucher, x-operation: erp.finance.voucher.edit, summary: 'Change a draft (its whole lines), by version', requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/VoucherIn'}}}}, responses: {'200': {description: the voucher, content: {application/json: {schema: {$ref: '#/components/schemas/Voucher'}}}}, default: {$ref: '#/components/responses/problem'}}}
+  /api/finance/vouchers/{id}/submit:
+    parameters: [{$ref: '#/components/parameters/id'}]
+    post: {operationId: submitVoucher, x-operation: erp.finance.voucher.edit, summary: Submit a draft for approval, requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Versioned'}}}}, responses: {'200': {description: the voucher, content: {application/json: {schema: {$ref: '#/components/schemas/Voucher'}}}}, default: {$ref: '#/components/responses/problem'}}}
+  /api/finance/vouchers/{id}/approve:
+    parameters: [{$ref: '#/components/parameters/id'}]
+    post: {operationId: approveVoucher, x-operation: erp.finance.voucher.approve, summary: 'Approve and post a submitted voucher; not by its maker (VC02, VC03)', requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Versioned'}}}}, responses: {'200': {description: the voucher, content: {application/json: {schema: {$ref: '#/components/schemas/Voucher'}}}}, default: {$ref: '#/components/responses/problem'}}}
+  /api/finance/vouchers/{id}/reject:
+    parameters: [{$ref: '#/components/parameters/id'}]
+    post: {operationId: rejectVoucher, x-operation: erp.finance.voucher.approve, summary: Reject a submitted voucher back to draft with a reason, requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/Reason'}}}}, responses: {'200': {description: the voucher, content: {application/json: {schema: {$ref: '#/components/schemas/Voucher'}}}}, default: {$ref: '#/components/responses/problem'}}}
+  /api/finance/vouchers/{id}/reverse:
+    parameters: [{$ref: '#/components/parameters/id'}]
+    post: {operationId: reverseVoucher, x-operation: erp.finance.voucher.approve, summary: 'A reversing voucher for a posted one (Idempotency-Key; VC04)', requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/Reason'}}}}, responses: {'200': {description: the reversing voucher, content: {application/json: {schema: {$ref: '#/components/schemas/Voucher'}}}}, default: {$ref: '#/components/responses/problem'}}}
+  /api/finance/balances:
+    get:
+      operationId: listBalances
+      x-operation: erp.finance.voucher.read
+      parameters:
+        - {name: legal_entity_id, in: query, required: true, schema: {type: string, format: uuid}}
+        - {name: period, in: query, required: true, schema: {type: string, pattern: '^[0-9]{4}-[0-9]{2}$'}}
+      responses:
+        '200': {description: each account's opening, debit, credit and closing in the base currency, content: {application/json: {schema: {type: object, required: [balances], properties: {balances: {type: array, items: {$ref: '#/components/schemas/Balance'}}}}}}}
+        default: {$ref: '#/components/responses/problem'}
+  /api/finance/open-items:
+    get:
+      operationId: listOpenItems
+      x-operation: erp.finance.open_item.read
+      parameters:
+        - {name: legal_entity_id, in: query, schema: {type: string, format: uuid}}
+        - {name: kind, in: query, schema: {enum: [receivable, payable, credit_balance]}}
+        - {name: partner_id, in: query, schema: {type: string, format: uuid}}
+        - {name: open, in: query, schema: {type: boolean}, description: 'true: with an open balance only'}
+        - {name: q, in: query, schema: {type: string}, description: the source's number}
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+      responses:
+        '200': {description: one page, newest first, content: {application/json: {schema: {type: object, required: [open_items, next_cursor], properties: {open_items: {type: array, items: {$ref: '#/components/schemas/OpenItem'}}, next_cursor: {type: string}}}}}}
+        default: {$ref: '#/components/responses/problem'}
+    post: {operationId: createOpenItem, x-operation: erp.finance.open_item.edit, summary: 'A manual open item, waiting for approval (Idempotency-Key)', requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/OpenItemIn'}}}}, responses: {'200': {description: the open item, content: {application/json: {schema: {$ref: '#/components/schemas/OpenItem'}}}}, default: {$ref: '#/components/responses/problem'}}}
+  /api/finance/open-items/{id}:
+    parameters: [{$ref: '#/components/parameters/id'}]
+    get: {operationId: getOpenItem, x-operation: erp.finance.open_item.read, summary: 'An open item with its claims and allocations', responses: {'200': {description: the open item, content: {application/json: {schema: {$ref: '#/components/schemas/OpenItem'}}}}, default: {$ref: '#/components/responses/problem'}}}
+  /api/finance/open-items/{id}/approve:
+    parameters: [{$ref: '#/components/parameters/id'}]
+    post: {operationId: approveOpenItem, x-operation: erp.finance.open_item.approve, summary: 'Approve and post a manual open item; not by its maker', requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Versioned'}}}}, responses: {'200': {description: the open item, content: {application/json: {schema: {$ref: '#/components/schemas/OpenItem'}}}}, default: {$ref: '#/components/responses/problem'}}}
+  /api/finance/open-items/{id}/cancel:
+    parameters: [{$ref: '#/components/parameters/id'}]
+    post: {operationId: cancelOpenItem, x-operation: erp.finance.open_item.edit, summary: Cancel a manual open item not approved yet, requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Versioned'}}}}, responses: {'200': {description: the open item, content: {application/json: {schema: {$ref: '#/components/schemas/OpenItem'}}}}, default: {$ref: '#/components/responses/problem'}}}
+  /api/finance/supplier-invoices:
+    get:
+      operationId: listSupplierInvoices
+      x-operation: erp.finance.supplier_invoice.read
+      parameters:
+        - {name: legal_entity_id, in: query, schema: {type: string, format: uuid}}
+        - {name: supplier_id, in: query, schema: {type: string, format: uuid}}
+        - {name: state, in: query, schema: {enum: [draft, matched, mismatch, posted, cancelled]}}
+        - {name: q, in: query, schema: {type: string}, description: the internal or the supplier's number}
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/limit'
+      responses:
+        '200': {description: one page, newest first, content: {application/json: {schema: {type: object, required: [supplier_invoices, next_cursor], properties: {supplier_invoices: {type: array, items: {$ref: '#/components/schemas/SupplierInvoice'}}, next_cursor: {type: string}}}}}}
+        default: {$ref: '#/components/responses/problem'}
+    post: {operationId: createSupplierInvoice, x-operation: erp.finance.supplier_invoice.edit, summary: 'Register a supplier invoice (Idempotency-Key; SI01)', requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/SupplierInvoiceIn'}}}}, responses: {'200': {description: the invoice, content: {application/json: {schema: {$ref: '#/components/schemas/SupplierInvoice'}}}}, default: {$ref: '#/components/responses/problem'}}}
+  /api/finance/supplier-invoices/{id}:
+    parameters: [{$ref: '#/components/parameters/id'}]
+    get: {operationId: getSupplierInvoice, x-operation: erp.finance.supplier_invoice.read, responses: {'200': {description: the invoice, content: {application/json: {schema: {$ref: '#/components/schemas/SupplierInvoice'}}}}, default: {$ref: '#/components/responses/problem'}}}
+    patch: {operationId: updateSupplierInvoice, x-operation: erp.finance.supplier_invoice.edit, summary: 'Change before posting (its whole lines), by version; back to draft (SI01)', requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/SupplierInvoiceIn'}}}}, responses: {'200': {description: the invoice, content: {application/json: {schema: {$ref: '#/components/schemas/SupplierInvoice'}}}}, default: {$ref: '#/components/responses/problem'}}}
+  /api/finance/supplier-invoices/{id}/match:
+    parameters: [{$ref: '#/components/parameters/id'}]
+    post: {operationId: matchSupplierInvoice, x-operation: erp.finance.supplier_invoice.edit, summary: 'Match against the purchase orders (SI02)', requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Versioned'}}}}, responses: {'200': {description: the invoice, matched or mismatch, content: {application/json: {schema: {$ref: '#/components/schemas/SupplierInvoice'}}}}, default: {$ref: '#/components/responses/problem'}}}
+  /api/finance/supplier-invoices/{id}/approve-difference:
+    parameters: [{$ref: '#/components/parameters/id'}]
+    post: {operationId: approveDifference, x-operation: erp.finance.supplier_invoice.approve, summary: 'Approve a mismatch, or an invoice without an order; not by its maker (SI04)', requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/Reason'}}}}, responses: {'200': {description: the invoice, content: {application/json: {schema: {$ref: '#/components/schemas/SupplierInvoice'}}}}, default: {$ref: '#/components/responses/problem'}}}
+  /api/finance/supplier-invoices/{id}/post:
+    parameters: [{$ref: '#/components/parameters/id'}]
+    post: {operationId: postSupplierInvoice, x-operation: erp.finance.supplier_invoice.edit, summary: 'Post: the payable, the voucher and the price confirmations (SI03)', requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Versioned'}}}}, responses: {'200': {description: the invoice, content: {application/json: {schema: {$ref: '#/components/schemas/SupplierInvoice'}}}}, default: {$ref: '#/components/responses/problem'}}}
+  /api/finance/supplier-invoices/{id}/cancel:
+    parameters: [{$ref: '#/components/parameters/id'}]
+    post: {operationId: cancelSupplierInvoice, x-operation: erp.finance.supplier_invoice.edit, summary: 'Cancel before posting (SI05)', requestBody: {content: {application/json: {schema: {$ref: '#/components/schemas/Versioned'}}}}, responses: {'200': {description: the invoice, content: {application/json: {schema: {$ref: '#/components/schemas/SupplierInvoice'}}}}, default: {$ref: '#/components/responses/problem'}}}
+  /api/finance/revaluations:
+    post: {operationId: runRevaluation, x-operation: erp.finance.period.close, summary: 'Foreign currency revaluation (protocol 05); not in this version: CAPABILITY_UNSUPPORTED', responses: {default: {$ref: '#/components/responses/problem'}}}
+  /api/finance/release-ledgers/{order_id}:
+    parameters: [{name: order_id, in: path, required: true, schema: {type: string, format: uuid}}]
+    get: {operationId: getReleaseLedger, x-operation: erp.finance.open_item.read, summary: 'An order''s release ledger (protocol 05''s cash before delivery); not in this version: CAPABILITY_UNSUPPORTED', responses: {default: {$ref: '#/components/responses/problem'}}}
+components:
+  parameters:
+    id: {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+    cursor: {name: cursor, in: query, schema: {type: string}}
+    limit: {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 200, default: 50}}
+  responses:
+    problem:
+      description: an error (application/problem+json with reason)
+      content:
+        application/problem+json:
+          schema:
+            type: object
+            required: [reason]
+            properties: {reason: {type: string}, detail: {type: string}}
+  schemas:
+    Decimal: {type: string, pattern: '^[0-9]+(\.[0-9]+)?$', description: a decimal string}
+    Versioned:
+      type: object
+      additionalProperties: false
+      properties: {version: {type: integer, description: 'the version the change is made on; omitted: the current one'}}
+    Reason:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties: {reason: {type: string, minLength: 1}, version: {type: integer}}
+    Account:
+      type: object
+      required: [id, legal_entity_id, code, name, category, parent_id, postable, state, version, updated_at]
+      properties:
+        id: {type: string, format: uuid}
+        legal_entity_id: {type: string, format: uuid}
+        code: {type: string}
+        name: {type: string}
+        category: {enum: [asset, liability, equity, income, expense]}
+        parent_id: {type: [string, 'null'], format: uuid}
+        postable: {type: boolean, description: a leaf account vouchers may name}
+        state: {enum: [active, inactive]}
+        version: {type: integer}
+        updated_at: {type: string, format: date-time}
+    AccountIn:
+      type: object
+      additionalProperties: false
+      required: [legal_entity_id, code, name, category]
+      properties:
+        legal_entity_id: {type: string, format: uuid}
+        code: {type: string, pattern: '^[0-9A-Z.-]{1,20}$'}
+        name: {type: string, minLength: 1}
+        category: {enum: [asset, liability, equity, income, expense]}
+        parent_id: {type: [string, 'null'], format: uuid}
+        postable: {type: boolean, default: true}
+    AccountPatch:
+      type: object
+      additionalProperties: false
+      properties:
+        name: {type: string, minLength: 1}
+        state: {enum: [active, inactive]}
+        version: {type: integer}
+    PostingRule:
+      type: object
+      required: [rule_key, roles]
+      properties:
+        rule_key: {type: string}
+        roles: {type: object, additionalProperties: {enum: [debit, credit]}, description: role -> the side its amount posts to}
+    Mapping:
+      type: object
+      required: [legal_entity_id, entries]
+      properties:
+        legal_entity_id: {type: string, format: uuid}
+        entries:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [rule_key, role, account_code]
+            properties: {rule_key: {type: string}, role: {type: string}, account_code: {type: string}}
+        version: {type: integer, description: '0: never set'}
+    Period: {$ref: 'events/erp.accounting_period.changed.v1.schema.json'}
+    VoucherLineIn:
+      type: object
+      additionalProperties: false
+      required: [account_code, side, amount]
+      properties:
+        account_code: {type: string}
+        side: {enum: [debit, credit]}
+        amount: {$ref: '#/components/schemas/Decimal'}
+        partner_id: {type: [string, 'null'], format: uuid}
+        department_id: {type: [string, 'null'], format: uuid}
+    VoucherIn:
+      type: object
+      additionalProperties: false
+      required: [legal_entity_id, business_date, description, lines]
+      properties:
+        legal_entity_id: {type: string, format: uuid}
+        business_date: {type: string, format: date}
+        description: {type: string, minLength: 1}
+        version: {type: integer}
+        lines: {type: array, minItems: 2, maxItems: 500, items: {$ref: '#/components/schemas/VoucherLineIn'}, description: in the legal entity's base currency; debits equal credits}
+    Voucher:
+      type: object
+      required: [id, legal_entity_id, number, period, business_date, posting_date, description, source, state, maker_id, approver_id, reason, reverses_voucher_id, reversed_by_id, lines, version, updated_at]
+      properties:
+        id: {type: string, format: uuid}
+        legal_entity_id: {type: string, format: uuid}
+        number: {type: [string, 'null'], description: given when posted (continuous per legal entity and period)}
+        period: {type: string}
+        business_date: {type: string, format: date}
+        posting_date: {type: string, format: date}
+        description: {type: string}
+        source: {type: object, required: [kind, id], properties: {kind: {type: string, description: 'a fact''s rule key, or manual'}, id: {type: [string, 'null']}}}
+        state: {enum: [draft, submitted, posted, reversed]}
+        maker_id: {type: [string, 'null']}
+        approver_id: {type: [string, 'null']}
+        reason: {type: [string, 'null'], description: the last rejection's or the reversal's}
+        reverses_voucher_id: {type: [string, 'null'], format: uuid}
+        reversed_by_id: {type: [string, 'null'], format: uuid}
+        lines:
+          type: array
+          items:
+            type: object
+            required: [account_code, side, currency, amount, base_amount, partner_id, department_id]
+            properties: {account_code: {type: string}, side: {enum: [debit, credit]}, currency: {type: string}, amount: {$ref: '#/components/schemas/Decimal'}, base_amount: {$ref: '#/components/schemas/Decimal'}, partner_id: {type: [string, 'null']}, department_id: {type: [string, 'null']}}
+        version: {type: integer}
+        updated_at: {type: string, format: date-time}
+    Balance:
+      type: object
+      required: [account_code, opening, debit, credit, closing]
+      properties: {account_code: {type: string}, opening: {type: string}, debit: {type: string}, credit: {type: string}, closing: {type: string, description: signed; debit positive}}
+    OpenItemIn:
+      type: object
+      additionalProperties: false
+      required: [legal_entity_id, kind, partner_id, currency, amount, due_date, description, counter_account_code]
+      properties:
+        legal_entity_id: {type: string, format: uuid}
+        kind: {enum: [receivable, payable]}
+        partner_id: {type: string, format: uuid}
+        currency: {type: string, pattern: '^[A-Z]{3}$'}
+        amount: {$ref: '#/components/schemas/Decimal'}
+        due_date: {type: string, format: date}
+        description: {type: string, minLength: 1}
+        counter_account_code: {type: string, description: 'the other side of the voucher (e.g. the VAT payable)'}
+        department_id: {type: [string, 'null'], format: uuid}
+    OpenItem:
+      type: object
+      required: [id, legal_entity_id, kind, partner_id, currency, amount, settled, pay_claimed, available, open_balance, due_date, origin, source, state, department_id, claims, allocations, version, updated_at]
+      properties:
+        id: {type: string, format: uuid}
+        legal_entity_id: {type: string, format: uuid}
+        kind: {enum: [receivable, payable, credit_balance]}
+        partner_id: {type: string, format: uuid}
+        currency: {type: string}
+        amount: {$ref: '#/components/schemas/Decimal'}
+        settled: {$ref: '#/components/schemas/Decimal'}
+        pay_claimed: {$ref: '#/components/schemas/Decimal'}
+        available: {$ref: '#/components/schemas/Decimal'}
+        open_balance: {$ref: '#/components/schemas/Decimal'}
+        due_date: {type: string, format: date}
+        origin: {enum: [invoice, supplier_invoice, manual, fund]}
+        source: {type: object, required: [kind, id, number], properties: {kind: {type: string}, id: {type: [string, 'null']}, number: {type: [string, 'null']}}}
+        state: {enum: [pending_approval, open, settled, cancelled], description: 'a manual one waits for approval; then open until the open balance is zero'}
+        department_id: {type: [string, 'null'], format: uuid}
+        claims: {type: array, items: {type: object, required: [claim_id, amount, state], properties: {claim_id: {type: string}, amount: {type: string}, state: {type: string}}}}
+        allocations: {type: array, items: {type: object, required: [id, fund_fact_id, amount, direction], properties: {id: {type: string}, fund_fact_id: {type: string}, amount: {type: string}, direction: {enum: [settle, reverse]}}}}
+        version: {type: integer}
+        updated_at: {type: string, format: date-time}
+    SupplierInvoiceLineIn:
+      type: object
+      additionalProperties: false
+      required: [quantity, unit_price, tax]
+      properties:
+        order_line_id: {type: [string, 'null'], format: uuid, description: 'a purchase order line; null: an expense line'}
+        description: {type: string}
+        expense_account_code: {type: string, description: an expense line's account}
+        quantity: {$ref: '#/components/schemas/Decimal'}
+        unit_price: {$ref: '#/components/schemas/Decimal'}
+        tax: {$ref: '#/components/schemas/Decimal'}
+    SupplierInvoiceIn:
+      type: object
+      additionalProperties: false
+      required: [legal_entity_id, supplier_id, supplier_number, invoice_date, due_date, currency, lines]
+      properties:
+        legal_entity_id: {type: string, format: uuid}
+        supplier_id: {type: string, format: uuid}
+        supplier_number: {type: string, minLength: 1}
+        invoice_date: {type: string, format: date}
+        due_date: {type: string, format: date}
+        currency: {type: string, pattern: '^[A-Z]{3}$'}
+        department_id: {type: [string, 'null'], format: uuid}
+        version: {type: integer}
+        lines: {type: array, minItems: 1, maxItems: 200, items: {$ref: '#/components/schemas/SupplierInvoiceLineIn'}}
+    SupplierInvoice:
+      type: object
+      required: [id, number, legal_entity_id, supplier_id, supplier_number, invoice_date, due_date, currency, net, tax, gross, state, difference_approved_by, open_item_id, department_id, lines, version, updated_at]
+      properties:
+        id: {type: string, format: uuid}
+        number: {type: string}
+        legal_entity_id: {type: string, format: uuid}
+        supplier_id: {type: string, format: uuid}
+        supplier_number: {type: string}
+        invoice_date: {type: string, format: date}
+        due_date: {type: string, format: date}
+        currency: {type: string}
+        net: {$ref: '#/components/schemas/Decimal'}
+        tax: {$ref: '#/components/schemas/Decimal'}
+        gross: {$ref: '#/components/schemas/Decimal'}
+        state: {enum: [draft, matched, mismatch, posted, cancelled]}
+        difference_approved_by: {type: [string, 'null']}
+        open_item_id: {type: [string, 'null'], format: uuid}
+        department_id: {type: [string, 'null'], format: uuid}
+        lines:
+          type: array
+          items:
+            type: object
+            required: [id, order_line_id, description, quantity, unit_price, net, tax, match]
+            properties:
+              id: {type: string, format: uuid}
+              order_line_id: {type: [string, 'null']}
+              description: {type: [string, 'null']}
+              quantity: {type: string}
+              unit_price: {type: string}
+              net: {type: string}
+              tax: {type: string}
+              match:
+                anyOf:
+                  - {type: 'null'}
+                  - type: object
+                    required: [result, invoiceable_quantity, order_unit_price, problems]
+                    properties: {result: {enum: [ok, difference]}, invoiceable_quantity: {type: string}, order_unit_price: {type: string}, problems: {type: array, items: {type: string}}}
+        version: {type: integer}
+        updated_at: {type: string, format: date-time}
