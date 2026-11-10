@@ -71,8 +71,14 @@ configSchema:
       description: 'process-level: the same for every member of a shell'
       secret: true
       type: string
+    CLAIM_PERIOD:
+      description: 'a pending payment claim''s period (protocol 05''s start value 7 days); unset: 7 days; a duration (e.g. 2s, 500ms)'
+      type: string
     DEPLOYMENT_ID:
       description: 'process-level: the same for every member of a shell'
+      type: string
+    FINANCE_FACT_SOURCES:
+      description: 'the accounting and fund facts subscribed to: JSON, [{stream, type}], each type ending in .fund_fact.v1 or .accounting_fact.v1, as the assembly''s sources publish them; unset: none'
       type: string
     IAM_ISSUER:
       description: 'process-level: the same for every member of a shell'

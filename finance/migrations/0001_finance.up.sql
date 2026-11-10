@@ -224,3 +224,36 @@ CREATE TABLE invoiced_movement (
     movement_id   uuid PRIMARY KEY,
     base_quantity numeric(19,6) NOT NULL
 );
+
+-- Payment claims (docs/design.md, the claim table; protocol 05's claim pattern, the payment use): an open item's
+-- pay_claimed is the sum of its pending and confirmed claims. claim_id is the claimant's; expires_at is a pending
+-- claim's.
+CREATE TABLE pay_claim (
+    claim_id          text PRIMARY KEY,
+    open_item_id      uuid NOT NULL REFERENCES open_item (id),
+    claimant          text NOT NULL,
+    amount            numeric(19,4) NOT NULL CHECK (amount > 0),
+    state             text NOT NULL CHECK (state IN ('pending', 'confirmed', 'formalized', 'expired', 'released')),
+    expires_at        timestamptz,
+    formalized_amount numeric(19,4) NOT NULL DEFAULT 0,
+    reversed_amount   numeric(19,4) NOT NULL DEFAULT 0,
+    version           bigint NOT NULL DEFAULT 1,
+    created_at        timestamptz NOT NULL DEFAULT now(),
+    updated_at        timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX pay_claim_open_item ON pay_claim (open_item_id);
+
+-- Allocations (docs/design.md, ST03-ST05): money of a fund fact on an open item, or a reversal of one (the original
+-- kept); claim_id when the money used a payment claim.
+CREATE TABLE allocation (
+    id                     uuid PRIMARY KEY,
+    fund_fact_id           uuid NOT NULL,
+    open_item_id           uuid NOT NULL REFERENCES open_item (id),
+    amount                 numeric(19,4) NOT NULL CHECK (amount > 0),
+    direction              text NOT NULL CHECK (direction IN ('settle', 'reverse')),
+    claim_id               text REFERENCES pay_claim (claim_id),
+    reverses_allocation_id uuid UNIQUE REFERENCES allocation (id),
+    created_at             timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX allocation_open_item ON allocation (open_item_id, created_at);
+CREATE INDEX allocation_fund ON allocation (fund_fact_id);

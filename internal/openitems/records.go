@@ -2,6 +2,7 @@ package openitems
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -19,8 +20,8 @@ type Source struct {
 	Number *string `json:"number"`
 }
 
-// Claim and Allocation are the claims on an open item and its settlements (filled by the claims and settlement
-// modules; empty until they exist).
+// Claim and Allocation are the claims on an open item and its allocations, read from the claims module's pay_claim and
+// the settlement module's allocation.
 type Claim struct {
 	ClaimID string `json:"claim_id"`
 	Amount  string `json:"amount"`
@@ -66,17 +67,29 @@ const Cols = `o.id::text, o.legal_entity_id::text, o.kind, o.partner_id::text, o
 	trim_scale(o.settled)::text, trim_scale(o.pay_claimed)::text, trim_scale(o.amount - o.settled - o.pay_claimed)::text,
 	trim_scale(o.amount - o.settled)::text, o.due_date::text, o.origin, o.source_kind, o.source_id, o.source_number,
 	CASE WHEN o.state = 'open' AND o.amount = o.settled THEN 'settled' ELSE o.state END, o.department_id::text,
-	o.department_path, o.version, o.created_at, o.updated_at`
+	o.department_path, o.version, o.created_at, o.updated_at,
+	coalesce((SELECT jsonb_agg(jsonb_build_object('claim_id', c.claim_id, 'amount', trim_scale(c.amount)::text,
+		'state', c.state) ORDER BY c.created_at) FROM pay_claim c WHERE c.open_item_id = o.id), '[]'::jsonb),
+	coalesce((SELECT jsonb_agg(jsonb_build_object('id', a.id, 'fund_fact_id', a.fund_fact_id,
+		'amount', trim_scale(a.amount)::text, 'direction', a.direction) ORDER BY a.created_at, a.id)
+		FROM allocation a WHERE a.open_item_id = o.id), '[]'::jsonb)`
 
 // Scan reads one row of Cols.
 func Scan(row pgx.Row) (OpenItem, error) {
-	o := OpenItem{Claims: []Claim{}, Allocations: []Allocation{}}
+	var o OpenItem
 	var created, updated time.Time
+	var claims, allocations []byte
 	err := row.Scan(&o.ID, &o.LegalEntityID, &o.Kind, &o.PartnerID, &o.Currency, &o.Amount, &o.Settled, &o.PayClaimed,
 		&o.Available, &o.OpenBalance, &o.DueDate, &o.Origin, &o.Source.Kind, &o.Source.ID, &o.Source.Number, &o.State,
-		&o.DepartmentID, &o.DepartmentPath, &o.Version, &created, &updated)
+		&o.DepartmentID, &o.DepartmentPath, &o.Version, &created, &updated, &claims, &allocations)
+	if err != nil {
+		return o, err
+	}
 	o.CreatedAt, o.UpdatedAt = canon.Time(created), canon.Time(updated)
-	return o, err
+	if err := json.Unmarshal(claims, &o.Claims); err != nil {
+		return o, err
+	}
+	return o, json.Unmarshal(allocations, &o.Allocations)
 }
 
 // Get reads an open item in tx; lock takes its row's lock.

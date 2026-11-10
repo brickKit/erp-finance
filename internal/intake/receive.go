@@ -11,6 +11,9 @@ import (
 
 	core "github.com/brickKit/erp-finance/v3/internal/core"
 
+	masterdata "github.com/brickKit/erp-finance/v3/internal/masterdata"
+	settlement "github.com/brickKit/erp-finance/v3/internal/settlement"
+
 	"github.com/brickKit/be-sdk-go/v3/db"
 	"github.com/brickKit/be-sdk-go/v3/errs"
 	"github.com/brickKit/be-sdk-go/v3/events"
@@ -89,8 +92,23 @@ type received struct {
 	State  string
 }
 
-// PostFact posts a received fact by its type; one already posted is done. A legal entity that has not mapped the
-// rule's roles waits (AR03): the item retries without spending its attempts until the mapping exists.
+// poster posts one kind of fact in the posting transaction and answers its voucher.
+type poster func(m *core.Base, ctx context.Context, tx db.Tx, f core.Received) (string, error)
+
+func posterOf(typ string) poster {
+	switch {
+	case typ == core.InvoiceIssued:
+		return postInvoice
+	case strings.HasSuffix(typ, core.FundFactSuffix):
+		return settlement.PostFund
+	}
+	return nil
+}
+
+// PostFact posts a received fact (AR03): the evidence of its legal entity outside any transaction, then in one
+// transaction the fact's posting by its type and the fact marked posted; one already posted is done. A legal entity
+// that has not mapped the rule's roles, or a correction before the fact it corrects, waits: the item retries without
+// spending its attempts.
 func PostFact(m *core.Base, ctx context.Context, r *work.Run) error {
 	var a postArgs
 	if err := json.Unmarshal(r.Args, &a); err != nil {
@@ -107,16 +125,46 @@ func PostFact(m *core.Base, ctx context.Context, r *work.Run) error {
 	if err != nil || f.State == "posted" {
 		return err
 	}
-	switch f.Type {
-	case core.InvoiceIssued:
-		err = postInvoice(m, ctx, r, f)
-	default:
+	post := posterOf(f.Type)
+	if post == nil {
 		return work.Permanent(errors.New("intake: no posting for " + f.Type))
 	}
-	if errs.Is(err, core.ID, "MAPPING_MISSING") {
+	in, err := evidence(m, ctx, f)
+	if err != nil {
+		return err
+	}
+	err = r.Complete(ctx, func(ctx context.Context, tx db.Tx) error {
+		if pending, err := claim(ctx, tx, f.FactID); err != nil || !pending {
+			return err
+		}
+		voucher, err := post(m, ctx, tx, in)
+		if err != nil {
+			return err
+		}
+		return posted(ctx, tx, f.FactID, voucher)
+	})
+	if errs.Is(err, core.ID, "MAPPING_MISSING") || errors.Is(err, core.ErrWaitForOriginal) {
 		return work.Wait(err)
 	}
 	return err
+}
+
+// evidence reads the fact's legal entity and its base currency's places from master data.
+func evidence(m *core.Base, ctx context.Context, f received) (core.Received, error) {
+	in := core.Received{FactID: f.FactID, Type: f.Type, Source: f.Source, Data: f.Data}
+	var head struct {
+		LegalEntityID string `json:"legal_entity_id"`
+	}
+	if err := json.Unmarshal(f.Data, &head); err != nil || !core.UUIDForm.MatchString(head.LegalEntityID) {
+		return in, work.Permanent(errors.New("intake: fact " + f.FactID + " names no legal entity"))
+	}
+	le, err := masterdata.LegalEntityOf(m, ctx, head.LegalEntityID)
+	if err != nil {
+		return in, err
+	}
+	in.LegalEntityID, in.LegalEntityCode, in.BaseCurrency = le.ID, le.Code, le.BaseCurrency
+	in.BaseScale, err = masterdata.CurrencyScale(m, ctx, le.BaseCurrency)
+	return in, err
 }
 
 // claim locks the fact in the posting transaction: false when another run posted it meanwhile.

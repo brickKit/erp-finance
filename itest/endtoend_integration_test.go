@@ -76,6 +76,8 @@ type fixture struct {
 	accounts map[string]map[string]any
 	// erp/purchase's match basis
 	purchase *purchaseStandIn
+	// the payable of the first supplier invoice (the supplierInvoices step), 1585.2 CNY
+	payable string
 }
 
 func TestFinanceEndToEnd(t *testing.T) {
@@ -86,6 +88,8 @@ func TestFinanceEndToEnd(t *testing.T) {
 	fx.periods()
 	fx.receivables()
 	fx.supplierInvoices()
+	fx.claims()
+	fx.settlement()
 }
 
 // start makes the world, the stand-ins and mdm/org's stream, then migrates and runs the member.
@@ -130,7 +134,7 @@ func start(t *testing.T) *fixture {
 	// a clean stream each run (earlier runs and cells leave events on the shared NATS)
 	js, err := jetstream.Connect(natsURL, "finance-it-clean")
 	require.NoError(t, err)
-	for _, s := range []string{orgStream.Name, core.BillingStream, core.Stream} {
+	for _, s := range []string{orgStream.Name, core.BillingStream, paymentStream.Name, core.Stream} {
 		_ = js.DeleteStream(ctx, s) // not there: nothing to clean
 	}
 	_ = js.Close()
@@ -147,6 +151,11 @@ func start(t *testing.T) *fixture {
 		"MDM_ORG_GRPC_ENDPOINT": "http://" + itOrg, "MDM_PARTNER_GRPC_ENDPOINT": "http://" + itPartner,
 		"MDM_CURRENCY_GRPC_ENDPOINT": "http://" + itCurrency, "ERP_PURCHASE_GRPC_ENDPOINT": "http://" + itPurchase,
 		// Shanghai takes 5 % more quantity than invoiceable, no price difference; Beijing declares nothing (0)
+		// erp/payment's stand-in publishes fund facts and accounting facts on its stream (ST01)
+		"FINANCE_FACT_SOURCES": `[{"stream": "erp.payment", "type": "erp.payment.fund_fact.v1"},
+			{"stream": "erp.payment", "type": "erp.payment.accounting_fact.v1"}]`,
+		// a pending claim expires after 4 s here (CL05), 7 days by default
+		"CLAIM_PERIOD": "4s",
 		"MATCH_TOLERANCES": `{"` + fx.le + `": {"quantity_percent": "5", "price_percent": "0"}}`} {
 		env[k] = v
 	}

@@ -109,7 +109,8 @@ func (fx *fixture) supplierInvoices() {
 	// service line has none
 	inv = fx.siAction(fx.alice, id, "post", nil)
 	require.Equal(t, "posted", inv["state"], inv)
-	payable := fx.get("/api/finance/open-items/" + inv["open_item_id"].(string))
+	fx.payable = inv["open_item_id"].(string)
+	payable := fx.get("/api/finance/open-items/" + fx.payable)
 	assert.Equal(t, "payable", payable["kind"])
 	assert.Equal(t, fx.supplier, payable["partner_id"])
 	assert.Equal(t, "1585.2", payable["amount"])

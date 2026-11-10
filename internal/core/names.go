@@ -84,11 +84,11 @@ const (
 
 // Parameters (protocol 05, protocol 07, protocol 14).
 const (
-	ClaimPeriod   = 7 * 24 * time.Hour // a pending payment claim's period (protocol 05's start values)
-	MaxReadIDs    = 500
-	MaxLines      = 500
-	PriceScale    = 6
-	QuantityScale = 6
+	DefaultClaimPeriod = 7 * 24 * time.Hour // a pending payment claim's period unless CLAIM_PERIOD says (protocol 05's start values)
+	MaxReadIDs         = 500
+	MaxLines           = 500
+	PriceScale         = 6
+	QuantityScale      = 6
 )
 
 // DepartmentTables are the tables that copy their department's path (internal/orgunits rewrites them when a

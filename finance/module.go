@@ -2,8 +2,10 @@ package finance
 
 import (
 	"context"
+	"fmt"
 	"time"
 
+	claims "github.com/brickKit/erp-finance/v3/internal/claims"
 	core "github.com/brickKit/erp-finance/v3/internal/core"
 	intake "github.com/brickKit/erp-finance/v3/internal/intake"
 	ledger "github.com/brickKit/erp-finance/v3/internal/ledger"
@@ -27,6 +29,7 @@ import (
 // under internal/ (their map is internal/AGENTS.md).
 type Module struct {
 	financev3.UnimplementedFactServiceServer
+	financev3.UnimplementedClaimServiceServer
 	b *core.Base
 }
 
@@ -87,20 +90,28 @@ func (m *Module) Routes(r *httpx.Routes) error {
 	return nil
 }
 
-// Services registers the system surface: the facts by identity for any component.
+// Services registers the system surface: the payment claims and the due open items for erp/payment, the facts by
+// identity for any component.
 func (m *Module) Services(s *grpcx.Services) error {
+	claim := grpcx.Method{Operation: core.OpSysClaim, Callers: []string{core.Payment}}
+	s.Register(&financev3.ClaimService_ServiceDesc, m, map[string]grpcx.Method{"Claim": claim, "Renew": claim,
+		"Confirm": claim, "Release": claim, "Get": claim, "DueItems": claim})
 	s.Register(&financev3.FactService_ServiceDesc, m, map[string]grpcx.Method{
 		"Read": {Operation: core.OpSysRead, Callers: []string{grpcx.AnyComponent}}})
 	return nil
 }
 
-// Subscriptions declares the department projection's input (protocol 02) and erp/billing's issued invoices, which
-// form the receivables (protocol 05 step 2).
+// Subscriptions declares the department projection's input (protocol 02), erp/billing's issued invoices, which form
+// the receivables (protocol 05 step 2), and the accounting and fund facts of FINANCE_FACT_SOURCES (ST01).
 func (m *Module) Subscriptions(s *events.Subscriptions) error {
 	s.Add(events.Sub{Name: "org-unit-events", Streams: []string{core.OrgStream}, Types: []string{core.OrgUnitEvents},
 		Handle: m.received(orgunits.OnOrgUnit)})
 	s.Add(events.Sub{Name: "issued-invoices", Streams: []string{core.BillingStream}, Types: []string{core.InvoiceIssued},
 		Handle: m.received(intake.OnFact)})
+	for i, f := range m.b.FactSources { // ST01: the sources the assembly declares
+		s.Add(events.Sub{Name: fmt.Sprintf("facts-%d", i+1), Streams: []string{f.Stream}, Types: []string{f.Type},
+			Handle: m.received(intake.OnFact)})
+	}
 	return nil
 }
 
@@ -112,6 +123,8 @@ func (m *Module) Jobs(j *work.Jobs) error {
 		MaxAttempts: work.Unlimited, Handle: m.job(orgunits.RepairOrgUnits)})
 	j.Add(work.Job{Name: orgunits.JobRealignOrgUnits, Kind: work.Queue, Effect: work.IdempotentExternal,
 		MaxAttempts: work.Unlimited, Handle: m.job(orgunits.RealignOrgUnits)})
+	j.Add(work.Job{Name: claims.JobExpireClaim, Kind: work.Queue, Effect: work.Local, MaxAttempts: work.Unlimited,
+		Handle: m.job(claims.ExpireClaim)})
 	j.Add(work.Job{Name: intake.JobPostFact, Kind: work.Queue, Effect: work.IdempotentExternal,
 		MaxAttempts: work.Unlimited, Handle: m.job(intake.PostFact)})
 	return nil

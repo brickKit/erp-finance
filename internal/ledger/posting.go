@@ -225,3 +225,13 @@ func Convert(lines []Line, currency string, rate *string, baseScale int32) []Lin
 	out[largest].BaseAmount = adjusted.Text('f')
 	return out
 }
+
+// MarkReversed marks a posted voucher reversed by another (a fund fact's reversal mirrors its voucher, ST05).
+func MarkReversed(ctx context.Context, tx db.Tx, id, by string) error {
+	tag, err := tx.Exec(ctx, `UPDATE voucher SET state = 'reversed', reversed_by_id = $2, version = version + 1,
+		updated_at = now() WHERE id = $1 AND state = 'posted'`, id, by)
+	if err == nil && tag.RowsAffected() != 1 {
+		err = fmt.Errorf("ledger: voucher %s is not posted", id)
+	}
+	return err
+}

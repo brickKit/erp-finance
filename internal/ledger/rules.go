@@ -10,10 +10,13 @@ var Rules = map[string]map[string]string{
 	"sales_invoice": {"receivable": "debit", "revenue": "credit", "output_tax": "credit"},
 	// a posted supplier invoice: the purchase (or expense), the input tax and the payable
 	"supplier_invoice": {"purchase": "debit", "input_tax": "debit", "payable": "credit"},
-	// money received and settled against receivables (erp/payment's fund facts)
-	"receipt": {"bank": "debit", "receivable": "credit"},
-	// money paid and settled against payables
+	// money received (erp/payment's fund facts): against the customer's receivables, or held in suspense when the
+	// payer is not known (ST02)
+	"receipt": {"bank": "debit", "receivable": "credit", "suspense": "credit"},
+	// money paid against payables
 	"payment": {"payable": "debit", "bank": "credit"},
+	// money paid back to a customer against its credit balance
+	"refund": {"receivable": "debit", "bank": "credit"},
 }
 
 // RuleKeys are the rule keys in order.

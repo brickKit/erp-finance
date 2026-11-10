@@ -132,13 +132,18 @@ func (fx *fixture) invoice(le, currency string, rate map[string]any, date, net, 
 }
 
 func (fx *fixture) publishInvoice(inv map[string]any, record string) {
-	data, _ := json.Marshal(inv)
-	row := events.Row{EventID: ids.New().String(), Stream: billingStream.Name, Partition: billingStream.PartitionOf(record),
-		Type: core.InvoiceIssued, OccurredAt: time.Now(), RecordID: record, Version: 1, Projection: events.Full,
+	fx.publishFact(billingStream, core.InvoiceIssued, core.Billing, record, inv)
+}
+
+// publishFact publishes an incremental fact as its producer's forwarder would, on the record's partition.
+func (fx *fixture) publishFact(stream events.Stream, typ, producer, record string, payload map[string]any) {
+	data, _ := json.Marshal(payload)
+	row := events.Row{EventID: ids.New().String(), Stream: stream.Name, Partition: stream.PartitionOf(record),
+		Type: typ, OccurredAt: time.Now(), RecordID: record, Version: 1, Projection: events.Full,
 		Payload: data, Seq: time.Now().UnixNano(), Epoch: events.Epoch{Generation: 1, Timeline: 1}}
 	row.Digest = events.Digest(row.EventID, data)
-	require.NoError(fx.t, fx.tr.Publish(fx.ctx, events.Message{Subject: events.Subject(billingStream.Name, row.Partition, row.Type),
-		Headers: row.Headers(core.Billing, "billing-it"), Data: data}))
+	require.NoError(fx.t, fx.tr.Publish(fx.ctx, events.Message{Subject: events.Subject(stream.Name, row.Partition, row.Type),
+		Headers: row.Headers(producer, producer+"-it"), Data: data}))
 }
 
 // openItemOf waits for the open item an invoice formed.

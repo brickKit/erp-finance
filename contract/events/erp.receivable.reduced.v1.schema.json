@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://brickkit.dev/erp-finance/events/erp.receivable.reduced.v1.schema.json",
   "title": "erp.receivable.reduced.v1",
-  "description": "A receivable's amount was reduced (a credit note, an adjustment); protocol 05, carried with the invoice for erp/credit; an incremental fact (fact_id made in the transaction that did it).",
+  "description": "A receivable's open balance went down without reaching zero (a partial settlement; later a credit note, an adjustment); protocol 05, carried with the invoice for erp/credit; an incremental fact (fact_id made in the transaction that did it).",
   "type": "object",
   "additionalProperties": false,
   "required": [

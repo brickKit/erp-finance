@@ -36,12 +36,20 @@ func Keys() []config.Key {
 		// the supplier invoice matching's tolerances per legal entity (SI02): JSON, legal entity ID -> {"quantity_percent",
 		// "price_percent"} as decimal strings; a legal entity not named has 0 and 0. Unset: every legal entity 0 and 0
 		{Name: core.KeyMatchTolerances, Type: config.String},
+		// a pending payment claim's period (CL01, protocol 05's start value 7 days); unset: 7 days
+		{Name: core.KeyClaimPeriod, Type: config.Duration},
+		// the accounting and fund facts subscribed to (ST01): JSON, [{"stream", "type"}], each type ending in
+		// .fund_fact.v1 or .accounting_fact.v1; unset: none
+		{Name: core.KeyFactSources, Type: config.String},
 	}
 }
 
 // Own describes the own keys for the manifest's configSchema.
 var Own = map[string]string{core.KeyMatchTolerances: "the supplier invoice matching's tolerances per legal entity " +
-	"(JSON: legal entity ID -> {quantity_percent, price_percent}, decimal strings); a legal entity not named has 0"}
+	"(JSON: legal entity ID -> {quantity_percent, price_percent}, decimal strings); a legal entity not named has 0",
+	core.KeyClaimPeriod: "a pending payment claim's period (protocol 05's start value 7 days); unset: 7 days",
+	core.KeyFactSources: "the accounting and fund facts subscribed to: JSON, [{stream, type}], each type ending in " +
+		".fund_fact.v1 or .accounting_fact.v1, as the assembly's sources publish them; unset: none"}
 
 // Definition is the component as the launcher and the shells take it.
 func Definition() component.Definition {

@@ -10,7 +10,7 @@
 
 账单与发票（`erp/billing`）、收付款与银行（`erp/payment`）、存货成本（`erp/costing`）、税额（`erp/tax`，远期）不在这里。本版答“能力不支持”（`CAPABILITY_UNSUPPORTED`，D75）的：关账批次的协调、预收与款到发货、预付与借款、外币重估、递延、期末暂估、维度目录、供应商贷项与补差票、催款与报表、期初。
 
-**3.0.0 开发中**：科目表、过账规则与映射、期间、手工凭证与余额，已出账形成应收、未清项查询、`FactService.Read`，供应商票据与三单匹配已实现；付款认领、核销、人工未清项按装配项目阶段计划 C4 的 P3 依次加入，没做的路由答“能力不支持”。
+**3.0.0 开发中**：科目表、过账规则与映射、期间、手工凭证与余额，已出账形成应收、未清项查询、`FactService.Read`，供应商票据与三单匹配、付款认领与到期未清项、资金事实的核销已实现；会计事实的过账、人工未清项按装配项目阶段计划 C4 的 P3 依次加入，没做的路由答“能力不支持”。
 
 ## 部署前准备
 
@@ -36,6 +36,8 @@
 | `PG_HOST`、`PG_DATABASE`、`PG_USER`、`PG_PASSWORD`、`PG_SCHEMA`（必填） | 自己的数据库，密码是密钥；迁移另用 `PG_OWNER_USER`、`PG_OWNER_PASSWORD` |
 | `BUS_URL`（必填，密钥）、`IMPLEMENTATION_INSTANCE`（必填） | 消息系统；实现实例是安装时生成的随机身份 |
 | `MATCH_TOLERANCES` | 供应商票据的匹配容差，按法人：JSON，法人身份 → `{"quantity_percent": "5", "price_percent": "0"}`（十进制字符串）；没写的法人两个都是 0；格式不对时组件起不来 |
+| `FINANCE_FACT_SOURCES` | 订阅哪些来源的资金事实与会计事实：JSON 数组 `[{"stream": "erp.payment", "type": "erp.payment.fund_fact.v1"}]`，类型以 `.fund_fact.v1` 或 `.accounting_fact.v1` 结尾；按装了哪些来源填写，没填就不订阅（没有核销）；格式不对时组件起不来 |
+| `CLAIM_PERIOD` | 付款认领的期限（时长，例 `168h`）；没填是 7 天 |
 | `AUDIT_GRPC_URL` | 审计组件的系统面；缺时审计记录留在本地，按协议 03 处理 |
 
 依赖的地址由 BrickKit 按依赖注入（`MDM_ORG_GRPC_ENDPOINT`、`MDM_PARTNER_GRPC_ENDPOINT`、`MDM_CURRENCY_GRPC_ENDPOINT`，装了时还有 `ERP_PURCHASE_GRPC_ENDPOINT`），不是配置键。凭证号格式 `JV-<法人代码>-<年月>-<六位序号>`（连续）。
