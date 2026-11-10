@@ -11,7 +11,7 @@
 | `supplierinvoices` | 供应商票据与三单匹配、应付、票据单价确认（SI01–SI05） | `core`、`ledger`、`masterdata`、`openitems`、`orgunits`、`periods` |
 | `settlement` | 资金事实的过账与核销：分配、正式化与冲回、给信用的应收事实（ST02–ST05） | `core`、`claims`、`ledger`、`openitems`、`periods` |
 | `claims` | 付款认领与到期未清项（CL01–CL09） | `core`、`masterdata`、`openitems` |
-| `intake` | 收到的事实：收件去重、取证、过账工作项；已出账 → 应收（AR01–AR04）；资金事实交给 `settlement` | `core`、`ledger`、`masterdata`、`openitems`、`periods`、`settlement` |
+| `intake` | 收到的事实：收件去重、取证、过账工作项；已出账 → 应收（AR01–AR04）；会计事实过账（AF01、AF02）；资金事实交给 `settlement` | `core`、`ledger`、`masterdata`、`openitems`、`periods`、`settlement` |
 | `vouchers` | 手工凭证与它的生命周期（VC01–VC04） | `core`、`ledger`、`masterdata`、`periods` |
 | `ledger` | 科目表、过账规则与映射、凭证的写入与过账（连续凭证号）、余额 | `core` |
 | `periods` | 会计期间与它的生命周期（PD01、PD02） | `core` |

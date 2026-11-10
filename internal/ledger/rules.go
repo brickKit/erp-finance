@@ -17,6 +17,10 @@ var Rules = map[string]map[string]string{
 	"payment": {"payable": "debit", "bank": "credit"},
 	// money paid back to a customer against its credit balance
 	"refund": {"receivable": "debit", "bank": "credit"},
+	// erp/payment's accounting facts (AF02): money moved between the company's accounts, a bank's charges, its interest
+	"fund_transfer": {"bank_in": "debit", "bank_out": "credit"},
+	"bank_charge":   {"expense": "debit", "bank": "credit"},
+	"bank_interest": {"bank": "debit", "income": "credit"},
 }
 
 // RuleKeys are the rule keys in order.

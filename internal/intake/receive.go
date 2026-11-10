@@ -101,6 +101,8 @@ func posterOf(typ string) poster {
 		return postInvoice
 	case strings.HasSuffix(typ, core.FundFactSuffix):
 		return settlement.PostFund
+	case strings.HasSuffix(typ, core.AccountingFactSuffix):
+		return postAccounting
 	}
 	return nil
 }
