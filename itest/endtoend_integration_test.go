@@ -92,6 +92,7 @@ func TestFinanceEndToEnd(t *testing.T) {
 	fx.settlement()
 	fx.accountingFacts()
 	fx.manualItems()
+	fx.recoveryChecks()
 }
 
 // start makes the world, the stand-ins and mdm/org's stream, then migrates and runs the member.

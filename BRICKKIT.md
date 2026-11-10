@@ -44,7 +44,7 @@
 
 ## 契约索引
 
-- **系统面**（本仓库 `contract/proto`，模块 `github.com/brickKit/erp-finance/contract/v3`，标签 `contract/v3.…`）：`be.erp.finance.v3.ClaimService`（`Claim`、`Renew`、`Confirm`、`Release`、`Get`、`DueItems`；只对 `erp/payment` 开放，操作 `erp.finance.system.claim`）、`be.erp.finance.v3.FactService/Read`（增量事实按身份读回；任一组件，操作 `erp.finance.system.read`）。
+- **系统面**（本仓库 `contract/proto`，模块 `github.com/brickKit/erp-finance/contract/v3`，标签 `contract/v3.…`）：`be.erp.finance.v3.ClaimService`（`Claim`、`Renew`、`Confirm`、`Release`、`Get`、`DueItems`；只对 `erp/payment` 开放，操作 `erp.finance.system.claim`）、`be.erp.finance.v3.FactService/Read`（增量事实按身份读回；任一组件，操作 `erp.finance.system.read`）。整套恢复的核对（`be.recovery.v1.CheckService`）答科目与映射、凭证、期间、未清项、供应商票据、付款认领的“还在不在”，被推过的凭证号登记作废，检查 `erp.finance.pending_facts` 报出收到还没过账的事实。
 - **共享契约**：`contract/events/shared/accounting_fact.v1.schema.json`、`fund_fact.v1.schema.json`。来源组件在自己的流上用 `<领域>.<来源>.accounting_fact.v1`、`…fund_fact.v1` 的类型发布这个形状。
 - **用户面**：`contract/openapi.yaml`。操作 `erp.finance.account.read`、`.manage`，`erp.finance.voucher.read`、`.edit`、`.approve`，`erp.finance.period.read`、`.close`，`erp.finance.open_item.read`、`.edit`、`.approve`，`erp.finance.supplier_invoice.read`、`.edit`、`.approve`；都带法人维度，未清项与票据另带部门。新建要带 `Idempotency-Key`。
 - **事件**（流 `erp.finance`，schema 在 `contract/events/`）：`erp.voucher.posted.v1`、`erp.receivable.formed.v1`、`erp.open_item.settled.v1`、`erp.receivable.cleared.v1`、`erp.receivable.reduced.v1`、`erp.receivable.reopened.v1`、`erp.supplier_invoice.price_confirmed.v1`、`erp.supplier_invoice.price_reversed.v1`（增量事实，按 `fact_id` 去重），`erp.accounting_period.changed.v1`（完整状态）。

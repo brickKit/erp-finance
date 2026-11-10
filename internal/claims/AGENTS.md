@@ -14,7 +14,7 @@
 - 用法：在事务里锁住认领（`Get` 带 `FOR UPDATE`；不认识的是 `none`），`Lifecycle.Decide`，按格行事。状态的写入：新认领的插入在 `Claim`；到期、确认、释放经 `move`（离开 `pending`、`confirmed` 去 `expired`、`released` 时同一事务把数量退回 `pay_claimed`）；正式化经 `Formalize`（整个认领退出 `pay_claimed`，已核销由核销加上），冲回经 `ReverseFormalized`（只累加 `reversed_amount`）；续期只改期限。
 - 拒绝都答 `CLAIM_STATE`、`CLAIM_CONFLICT` 或 `CLAIM_EXCEEDS_AVAILABLE`（gRPC 的 `FailedPrecondition`），收付款据此不付；`Get` 问不认识的身份答 `NOT_FOUND`。
 - 到期（CL05）：认领与续期时各用 `EnqueueAt` 排一个到期时刻的工作项；到时锁住认领，期限确实已过、还是 `pending` 才到期，续期过或已确认的就什么也不做。期限是 `core.Base.ClaimPeriod`（配置键 `CLAIM_PERIOD`，没配 7 天）。
-- 每次变化都审计（操作 `erp.finance.system.claim`，操作者是调用的组件；到期是本组件）。
+- 每次变化都审计（操作 `erp.finance.system.claim`，操作者是调用的组件；到期是本组件），审计的内容是系统面答的认领加上版本（`change`；整套恢复按版本问它在不在）。
 
 ## 文件
 

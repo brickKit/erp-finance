@@ -22,6 +22,7 @@
 | --- | --- |
 | `receive.go` | `JobPostFact`；`OnFact`、`digestOf`；`poster`、`posterOf`、`PostFact`、`evidence`；`claim`、`posted` |
 | `invoice.go` | `invoice`（已出账里过账要读的字段）；`postInvoice` |
+| `checks.go` | `CheckPendingFacts`、`PendingFacts`：整套恢复时报出还没过账的事实（RC01） |
 | `accounting.go` | `accountingFact`（共享契约里要读的字段）；`postAccounting`、`stop` |
 
 ## 依赖与被依赖

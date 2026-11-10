@@ -37,16 +37,17 @@ type Record struct {
 	ExpiresAt        *time.Time
 	FormalizedAmount string
 	ReversedAmount   string
+	Version          int64
 }
 
 const cols = `claim_id, open_item_id::text, claimant, trim_scale(amount)::text, state, expires_at,
-	trim_scale(formalized_amount)::text, trim_scale(reversed_amount)::text`
+	trim_scale(formalized_amount)::text, trim_scale(reversed_amount)::text, version`
 
 // Get reads a claim in tx under its lock; an unknown claim is in the state none.
 func Get(ctx context.Context, tx db.Tx, id string) (Record, error) {
 	r := Record{ClaimID: id, State: None}
 	err := tx.QueryRow(ctx, `SELECT `+cols+` FROM pay_claim WHERE claim_id = $1 FOR UPDATE`, id).Scan(&r.ClaimID,
-		&r.OpenItemID, &r.Claimant, &r.Amount, &r.State, &r.ExpiresAt, &r.FormalizedAmount, &r.ReversedAmount)
+		&r.OpenItemID, &r.Claimant, &r.Amount, &r.State, &r.ExpiresAt, &r.FormalizedAmount, &r.ReversedAmount, &r.Version)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Record{ClaimID: id, State: None}, nil
 	}
@@ -93,9 +94,15 @@ func move(m *core.Base, ctx context.Context, tx db.Tx, r Record, d core.Decision
 	return after, change(m, ctx, tx, actor, after)
 }
 
+// change audits the claim as the system surface answers it, with its version (a full recovery asks for it, P14.3).
 func change(m *core.Base, ctx context.Context, tx db.Tx, actor string, r Record) error {
+	after := map[string]any{}
 	b, _ := json.Marshal(r.proto())
-	return core.Change(m, ctx, tx, actor, core.OpSysClaim, core.System, r.ClaimID, json.RawMessage(b))
+	if err := json.Unmarshal(b, &after); err != nil {
+		return err
+	}
+	after["version"] = r.Version
+	return core.Change(m, ctx, tx, actor, core.OpSysClaim, core.System, r.ClaimID, after)
 }
 
 // expireAt queues the claim's expiry at its expiry instant (CL05).

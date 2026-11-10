@@ -28,6 +28,7 @@
 | `settlement_integration_test.go` | `settlement` | 收付款的替身发布资金事实：同一到账发两次只核销一次、最早到期先分、跨法人与外币的不分；剩余形成客户贷方余额；退款与付款按已确认的认领正式化；不认识与未确认的认领不分配；付款冲正（重复的只一次）、到账冲正（应收重开）、冲正先于原事实到达；没有应收的伙伴的到账成为贷方余额、冲正后作废；不知道付款方的到账记暂挂 | ST02–ST05、CL07、CL09 | `settlement`、`claims`、`intake` |
 | `accountingfacts_integration_test.go` | `accountingFacts` | 收付款的替身发布会计事实：没映射的规则等着、映射后过账（部门与伙伴在每行）；美元按汇率快照、关闭月份的顺延；目录里没有的规则键等着；借贷不平的不过账 | AF01、AF02、PD01 | `intake`、`ledger` |
 | `manualitems_integration_test.go` | `manualItems` | 登记的拒绝（非末级的对方科目、外币、暂停的伙伴）；待批准的不能认领；登记人不能批准、版本不对、没映射时被拒；另一人批准：凭证、应收已形成；应付批准后能认领；取消与重复取消、取消的不能批准、已批准的不能取消 | MI01–MI03 | `manualitems`、`openitems` |
+| `recovery_integration_test.go` | `recoveryChecks` | 作为恢复工具（`ops/recover`）：别的组件被拒；审计过的每种对象都在、版本不低于最后一次审计，高一千版答“旧了”、新身份答“不在”；RC01 报出前面留下的两条没过账的事实 | RC01、be-protocol 第 14 章 | 入口 `finance/checks.go`、`intake` |
 
 共用的：
 

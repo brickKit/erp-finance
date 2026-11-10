@@ -2,23 +2,23 @@
 
 财务的业务，每个模块一个包。只给本仓库引用（Go 的 `internal`）：别的组件编译期就引用不了，跨组件只走契约（决定 0101）。
 
-先按下表找到模块，再读那个目录的 `AGENTS.md`。
+先按下表找到模块（按层从高到低排），再读那个目录的 `AGENTS.md`。
 
 ## 模块
 
 | 包 | 一句话 | 依赖（本组件内） |
 | --- | --- | --- |
-| `supplierinvoices` | 供应商票据与三单匹配、应付、票据单价确认（SI01–SI05） | `core`、`ledger`、`masterdata`、`openitems`、`orgunits`、`periods` |
-| `settlement` | 资金事实的过账与核销：分配、正式化与冲回、给信用的应收事实（ST02–ST05） | `core`、`claims`、`ledger`、`openitems`、`periods` |
-| `claims` | 付款认领与到期未清项（CL01–CL09） | `core`、`masterdata`、`openitems` |
 | `intake` | 收到的事实：收件去重、取证、过账工作项；已出账 → 应收（AR01–AR04）；会计事实过账（AF01、AF02）；资金事实交给 `settlement` | `core`、`ledger`、`masterdata`、`openitems`、`periods`、`settlement` |
+| `settlement` | 资金事实的过账与核销：分配、正式化与冲回、给信用的应收事实（ST02–ST05） | `core`、`claims`、`ledger`、`openitems`、`periods` |
+| `supplierinvoices` | 供应商票据与三单匹配、应付、票据单价确认（SI01–SI05） | `core`、`ledger`、`masterdata`、`openitems`、`orgunits`、`periods` |
 | `manualitems` | 人工未清项的登记、批准与取消（MI01–MI03） | `core`、`ledger`、`masterdata`、`openitems`、`orgunits`、`periods` |
+| `claims` | 付款认领与到期未清项（CL01–CL09） | `core`、`masterdata`、`openitems` |
 | `vouchers` | 手工凭证与它的生命周期（VC01–VC04） | `core`、`ledger`、`masterdata`、`periods` |
+| `orgunits` | 部门投影（协议 02） | `core`、`masterdata` |
 | `ledger` | 科目表、过账规则与映射、凭证的写入与过账（连续凭证号）、余额 | `core` |
 | `periods` | 会计期间与它的生命周期（PD01、PD02） | `core` |
 | `openitems` | 未清项：形成、查询；应收已形成的事实 | `core` |
 | `facts` | 系统面 `FactService.Read`：按身份读回本组件的增量事实 | `core` |
-| `orgunits` | 部门投影（协议 02） | `core`、`masterdata` |
 | `masterdata`（共用） | 事务外取证：主数据组件、`erp/purchase` 的匹配依据 | `core` |
 | `core`（共用） | 名字、资源与操作的定义、错误与校验、生命周期表、增量事实、`Base` | — |
 
@@ -27,8 +27,8 @@
 | 层 | 包 |
 | --- | --- |
 | 5 | `intake` |
-| 4 | `settlement` |
-| 3 | `claims`、`manualitems`、`supplierinvoices`、`vouchers`、`orgunits` |
+| 4 | `settlement`、`supplierinvoices`、`manualitems` |
+| 3 | `claims`、`vouchers`、`orgunits` |
 | 2 | `ledger`、`periods`、`openitems`、`facts`、`masterdata` |
 | 1 | `core` |
 
