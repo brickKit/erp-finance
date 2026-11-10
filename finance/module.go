@@ -5,21 +5,27 @@ import (
 	"time"
 
 	core "github.com/brickKit/erp-finance/v3/internal/core"
+	intake "github.com/brickKit/erp-finance/v3/internal/intake"
 	ledger "github.com/brickKit/erp-finance/v3/internal/ledger"
+	openitems "github.com/brickKit/erp-finance/v3/internal/openitems"
 	orgunits "github.com/brickKit/erp-finance/v3/internal/orgunits"
 	periods "github.com/brickKit/erp-finance/v3/internal/periods"
 	vouchers "github.com/brickKit/erp-finance/v3/internal/vouchers"
 
 	"github.com/brickKit/be-sdk-go/v3/db"
 	"github.com/brickKit/be-sdk-go/v3/events"
+	"github.com/brickKit/be-sdk-go/v3/grpcx"
 	"github.com/brickKit/be-sdk-go/v3/httpx"
 	"github.com/brickKit/be-sdk-go/v3/runtime"
 	"github.com/brickKit/be-sdk-go/v3/work"
+
+	financev3 "github.com/brickKit/erp-finance/contract/v3/gen/go/be/erp/finance/v3"
 )
 
 // Module is the finance component as the launcher and the shells run it: it only assembles the business modules
 // under internal/ (their map is internal/AGENTS.md).
 type Module struct {
+	financev3.UnimplementedFactServiceServer
 	b *core.Base
 }
 
@@ -56,9 +62,9 @@ func (m *Module) Routes(r *httpx.Routes) error {
 	add("POST", "/api/finance/vouchers/:id/reject", core.OpVoucherApprove, vouchers.Action(m.b, vouchers.Reject))                // rejectVoucher
 	add("POST", "/api/finance/vouchers/:id/reverse", core.OpVoucherApprove, vouchers.Action(m.b, vouchers.Reverse))              // reverseVoucher
 	add("GET", "/api/finance/balances", core.OpVoucherRead, h(ledger.ListBalances))                                              // listBalances
-	add("GET", "/api/finance/open-items", core.OpOpenItemRead, todo)                                                             // listOpenItems
+	add("GET", "/api/finance/open-items", core.OpOpenItemRead, h(openitems.ListOpenItems))                                       // listOpenItems
 	add("POST", "/api/finance/open-items", core.OpOpenItemEdit, todo)                                                            // createOpenItem
-	add("GET", "/api/finance/open-items/:id", core.OpOpenItemRead, todo)                                                         // getOpenItem
+	add("GET", "/api/finance/open-items/:id", core.OpOpenItemRead, h(openitems.GetOpenItem))                                     // getOpenItem
 	add("POST", "/api/finance/open-items/:id/approve", core.OpOpenItemApprove, todo)                                             // approveOpenItem
 	add("POST", "/api/finance/open-items/:id/cancel", core.OpOpenItemEdit, todo)                                                 // cancelOpenItem
 	add("GET", "/api/finance/supplier-invoices", core.OpSupplierInvRead, todo)                                                   // listSupplierInvoices
@@ -76,10 +82,20 @@ func (m *Module) Routes(r *httpx.Routes) error {
 	return nil
 }
 
-// Subscriptions declares the department projection's input (protocol 02).
+// Services registers the system surface: the facts by identity for any component.
+func (m *Module) Services(s *grpcx.Services) error {
+	s.Register(&financev3.FactService_ServiceDesc, m, map[string]grpcx.Method{
+		"Read": {Operation: core.OpSysRead, Callers: []string{grpcx.AnyComponent}}})
+	return nil
+}
+
+// Subscriptions declares the department projection's input (protocol 02) and erp/billing's issued invoices, which
+// form the receivables (protocol 05 step 2).
 func (m *Module) Subscriptions(s *events.Subscriptions) error {
 	s.Add(events.Sub{Name: "org-unit-events", Streams: []string{core.OrgStream}, Types: []string{core.OrgUnitEvents},
 		Handle: m.received(orgunits.OnOrgUnit)})
+	s.Add(events.Sub{Name: "issued-invoices", Streams: []string{core.BillingStream}, Types: []string{core.InvoiceIssued},
+		Handle: m.received(intake.OnFact)})
 	return nil
 }
 
@@ -91,6 +107,8 @@ func (m *Module) Jobs(j *work.Jobs) error {
 		MaxAttempts: work.Unlimited, Handle: m.job(orgunits.RepairOrgUnits)})
 	j.Add(work.Job{Name: orgunits.JobRealignOrgUnits, Kind: work.Queue, Effect: work.IdempotentExternal,
 		MaxAttempts: work.Unlimited, Handle: m.job(orgunits.RealignOrgUnits)})
+	j.Add(work.Job{Name: intake.JobPostFact, Kind: work.Queue, Effect: work.IdempotentExternal,
+		MaxAttempts: work.Unlimited, Handle: m.job(intake.PostFact)})
 	return nil
 }
 

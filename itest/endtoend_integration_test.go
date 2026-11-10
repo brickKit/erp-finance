@@ -80,6 +80,7 @@ func TestFinanceEndToEnd(t *testing.T) {
 	fx.chart()
 	fx.vouchers()
 	fx.periods()
+	fx.receivables()
 }
 
 // start makes the world, the stand-ins and mdm/org's stream, then migrates and runs the member.
@@ -122,7 +123,7 @@ func start(t *testing.T) *fixture {
 	// a clean stream each run (earlier runs and cells leave events on the shared NATS)
 	js, err := jetstream.Connect(natsURL, "finance-it-clean")
 	require.NoError(t, err)
-	for _, s := range []string{orgStream.Name, core.Stream} {
+	for _, s := range []string{orgStream.Name, core.BillingStream, core.Stream} {
 		_ = js.DeleteStream(ctx, s) // not there: nothing to clean
 	}
 	_ = js.Close()

@@ -8,9 +8,12 @@
 
 | 包 | 一句话 | 依赖（本组件内） |
 | --- | --- | --- |
+| `intake` | 收到的事实：收件去重、过账工作项；已出账 → 应收（AR01–AR04） | `core`、`ledger`、`masterdata`、`openitems`、`periods` |
 | `vouchers` | 手工凭证与它的生命周期（VC01–VC04） | `core`、`ledger`、`masterdata`、`periods` |
 | `ledger` | 科目表、过账规则与映射、凭证的写入与过账（连续凭证号）、余额 | `core` |
 | `periods` | 会计期间与它的生命周期（PD01、PD02） | `core` |
+| `openitems` | 未清项：形成、查询；应收已形成的事实 | `core` |
+| `facts` | 系统面 `FactService.Read`：按身份读回本组件的增量事实 | `core` |
 | `orgunits` | 部门投影（协议 02） | `core`、`masterdata` |
 | `masterdata`（共用） | 事务外向主数据组件取证 | `core` |
 | `core`（共用） | 名字、资源与操作的定义、错误与校验、生命周期表、增量事实、`Base` | — |
@@ -19,8 +22,8 @@
 
 | 层 | 包 |
 | --- | --- |
-| 3 | `vouchers`、`orgunits` |
-| 2 | `ledger`、`periods`、`masterdata` |
+| 3 | `intake`、`vouchers`、`orgunits` |
+| 2 | `ledger`、`periods`、`openitems`、`facts`、`masterdata` |
 | 1 | `core` |
 
 核对：`go list -f '{{.Imports}}' ./internal/<包>`。

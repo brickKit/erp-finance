@@ -69,6 +69,9 @@ const (
 	OpSysClaim           = "erp.finance.system.claim"
 	// OpResend is the redelivery of this component's stream (be-protocol P6.38).
 	OpResend = "erp.finance.system.resend"
+	// OpPostFact is the audit's operation of a system voucher posted from a received fact; no one calls it, so it is
+	// no operation of the definitions (the actor is the fact's source).
+	OpPostFact = "erp.finance.voucher.post_fact"
 	// OpRecover is a full recovery's checks (be-protocol chapter 14: the recovery tool only).
 	OpRecover = "erp.finance.system.recover"
 )
@@ -90,7 +93,7 @@ const (
 
 // DepartmentTables are the tables that copy their department's path (internal/orgunits rewrites them when a
 // department moves).
-var DepartmentTables = []string{}
+var DepartmentTables = []string{"open_item"}
 
 func fields(names ...string) map[string]sdkauthz.Field {
 	out := map[string]sdkauthz.Field{}
@@ -108,6 +111,11 @@ var AccountFields = []string{"id", "legal_entity_id", "code", "name", "category"
 var VoucherFields = []string{"id", "legal_entity_id", "number", "period", "business_date", "posting_date", "description",
 	"source", "state", "maker_id", "approver_id", "reason", "reverses_voucher_id", "reversed_by_id", "lines", "version",
 	"created_at", "updated_at"}
+
+// OpenItemFields are what an open item list may filter and sort on.
+var OpenItemFields = []string{"id", "legal_entity_id", "kind", "partner_id", "currency", "amount", "settled", "pay_claimed",
+	"available", "open_balance", "open", "due_date", "origin", "source", "state", "department_id", "claims", "allocations",
+	"version", "created_at", "updated_at"}
 
 // PeriodFields are what a period list may filter and sort on.
 var PeriodFields = []string{"legal_entity_id", "period", "state", "revision", "reason", "version", "updated_at"}
@@ -139,7 +147,7 @@ func Definitions() *sdkauthz.Definitions {
 			{Type: Accounts, ViewOperation: OpAccountRead, Dimensions: entity(), Fields: fields(AccountFields...)},
 			{Type: Vouchers, ViewOperation: OpVoucherRead, Dimensions: entity(), Fields: fields(VoucherFields...)},
 			{Type: Periods, ViewOperation: OpPeriodRead, Dimensions: entity(), Fields: fields(PeriodFields...)},
-			{Type: OpenItems, ViewOperation: OpOpenItemRead, Dimensions: entityAndDepartment(), Fields: fields("id")},
+			{Type: OpenItems, ViewOperation: OpOpenItemRead, Dimensions: entityAndDepartment(), Fields: fields(OpenItemFields...)},
 			{Type: SupplierInvoices, ViewOperation: OpSupplierInvRead, Dimensions: entityAndDepartment(), Fields: fields("id")},
 			{Type: System, ViewOperation: OpSysRead, Dimensions: map[string]sdkauthz.Dimension{},
 				Fields: map[string]sdkauthz.Field{}},

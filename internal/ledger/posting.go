@@ -186,3 +186,42 @@ func deref(s *string) string {
 	}
 	return *s
 }
+
+// Convert gives resolved lines their currency and base amounts (docs/design.md, AR04): the base amount is the amount
+// times the fact's rate snapshot, rounded to the base currency's places line by line; a rounding difference goes to the
+// largest line (the first of equals), so the base balances too. A nil rate: the transaction currency is the base.
+func Convert(lines []Line, currency string, rate *string, baseScale int32) []Line {
+	out := make([]Line, len(lines))
+	ctx := apd.BaseContext.WithPrecision(80)
+	var diff apd.Decimal
+	largest := -1
+	var top apd.Decimal
+	for i, l := range lines {
+		out[i] = l
+		out[i].Currency = currency
+		out[i].BaseAmount = l.Amount
+		if rate != nil {
+			out[i].BaseAmount = core.Times(l.Amount, *rate, baseScale)
+		}
+		b, _, _ := apd.NewFromString(out[i].BaseAmount)
+		if l.Side == "debit" {
+			_, _ = ctx.Add(&diff, &diff, b)
+		} else {
+			_, _ = ctx.Sub(&diff, &diff, b)
+		}
+		if largest < 0 || b.Cmp(&top) > 0 {
+			largest, top = i, *b
+		}
+	}
+	if rate == nil || diff.IsZero() || largest < 0 {
+		return out // in the base currency an unbalanced fact stays unbalanced: Write refuses it
+	}
+	if out[largest].Side == "credit" {
+		diff.Neg(&diff)
+	}
+	var adjusted apd.Decimal
+	_, _ = ctx.Sub(&adjusted, &top, &diff)
+	adjusted.Reduce(&adjusted)
+	out[largest].BaseAmount = adjusted.Text('f')
+	return out
+}

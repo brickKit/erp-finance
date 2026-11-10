@@ -28,6 +28,7 @@ events:
     - erp.supplier_invoice.price_reversed.v1
     - erp.voucher.posted.v1
   subscribes:
+    - erp.invoice.issued.v1
     - mdm.org_unit.changed.v1
 
 deployment:

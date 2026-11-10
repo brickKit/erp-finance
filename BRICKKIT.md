@@ -10,12 +10,12 @@
 
 账单与发票（`erp/billing`）、收付款与银行（`erp/payment`）、存货成本（`erp/costing`）、税额（`erp/tax`，远期）不在这里。本版答“能力不支持”（`CAPABILITY_UNSUPPORTED`，D75）的：关账批次的协调、预收与款到发货、预付与借款、外币重估、递延、期末暂估、维度目录、供应商贷项与补差票、催款与报表、期初。
 
-**3.0.0 开发中**：科目表、过账规则与映射、期间、手工凭证与余额已实现；应收、供应商票据、付款认领、核销按装配项目阶段计划 C4 的 P3 依次加入，没做的路由答“能力不支持”。
+**3.0.0 开发中**：科目表、过账规则与映射、期间、手工凭证与余额，已出账形成应收、未清项查询、`FactService.Read` 已实现；供应商票据、付款认领、核销、人工未清项按装配项目阶段计划 C4 的 P3 依次加入，没做的路由答“能力不支持”。
 
 ## 部署前准备
 
 - 数据库：PostgreSQL 16 及以上；schema `erp_finance`，属主角色 `erp_finance_owner`（只供迁移）与运行角色 `erp_finance_rw`（只有读写数据的权限），名字来自装配项目的注册表。三者由部署方在第一次启动前建好；表由本组件的迁移建，迁移里不建角色、不授权。
-- 消息系统（`BUS_URL`）与实现实例（`IMPLEMENTATION_INSTANCE`）：凭证、应收、核销、票据单价确认以增量事实，期间以完整状态发布到流 `erp.finance`（4 个分区）；订阅 `mdm/org` 的部门事件（`mdm.org_unit.>`）。
+- 消息系统（`BUS_URL`）与实现实例（`IMPLEMENTATION_INSTANCE`）：凭证、应收、核销、票据单价确认以增量事实，期间以完整状态发布到流 `erp.finance`（4 个分区）；订阅 `mdm/org` 的部门事件（`mdm.org_unit.>`）与 `erp/billing` 的已出账（流 `erp.billing` 的 `erp.invoice.issued.v1`；到期日取账单带的、没有就取开票日期，法人没映射 `sales_invoice` 时等映射补上再过账）。
 - 部署的服务证书（`SERVICE_TLS_*`）；身份与授权（`IAM_*`、`AUTHZ_GRPC_URL`、`DEPLOYMENT_ID`）；审计（`AUDIT_GRPC_URL`）。
 - 依赖 `mdm/org`、`mdm/partner`、`mdm/currency`；`erp/purchase` 可选。
 - 事务密集、期末批量：单跑或外壳按负载。

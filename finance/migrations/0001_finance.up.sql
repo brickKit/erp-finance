@@ -114,3 +114,52 @@ CREATE TABLE voided_number (
     reason          text NOT NULL,
     PRIMARY KEY (legal_entity_id, series, period, number)
 );
+
+-- Received facts (protocol 05, common rules): the dedup record by fact ID and content digest, written in the
+-- transaction that received the event; the post-fact work item posts it outside that transaction (it takes evidence
+-- from master data first) and marks it posted in the posting transaction (internal/intake).
+CREATE TABLE fact_received (
+    fact_id     uuid PRIMARY KEY,
+    type        text NOT NULL,
+    source      text NOT NULL,
+    digest      text NOT NULL,
+    data        jsonb NOT NULL,
+    state       text NOT NULL DEFAULT 'pending' CHECK (state IN ('pending', 'posted')),
+    voucher_id  uuid REFERENCES voucher (id),
+    received_at timestamptz NOT NULL DEFAULT now(),
+    posted_at   timestamptz
+);
+CREATE INDEX fact_received_pending ON fact_received (received_at) WHERE state = 'pending';
+
+-- Open items: receivables, payables, a customer's credit balance; the available amount is amount - settled -
+-- pay_claimed (protocol 05). No state column for open or settled: the open balance says it; state is a manual item's
+-- approval (pending_approval, cancelled) or open.
+CREATE TABLE open_item (
+    id              uuid PRIMARY KEY,
+    legal_entity_id uuid NOT NULL,
+    kind            text NOT NULL CHECK (kind IN ('receivable', 'payable', 'credit_balance')),
+    partner_id      uuid NOT NULL,
+    currency        text NOT NULL,
+    amount          numeric(19,4) NOT NULL CHECK (amount >= 0),
+    settled         numeric(19,4) NOT NULL DEFAULT 0 CHECK (settled >= 0),
+    pay_claimed     numeric(19,4) NOT NULL DEFAULT 0 CHECK (pay_claimed >= 0),
+    due_date        date NOT NULL,
+    origin          text NOT NULL CHECK (origin IN ('invoice', 'supplier_invoice', 'manual', 'fund')),
+    source_kind     text NOT NULL,
+    source_id       text,
+    source_number   text,
+    state           text NOT NULL DEFAULT 'open' CHECK (state IN ('pending_approval', 'open', 'cancelled')),
+    department_id   uuid,
+    department_path text,
+    voucher_id      uuid REFERENCES voucher (id),
+    search          text NOT NULL DEFAULT '',
+    search_version  int NOT NULL DEFAULT 0,
+    version         bigint NOT NULL DEFAULT 1,
+    created_at      timestamptz NOT NULL DEFAULT now(),
+    updated_at      timestamptz NOT NULL DEFAULT now(),
+    is_open         boolean GENERATED ALWAYS AS (state = 'open' AND amount > settled) STORED,
+    CHECK (settled + pay_claimed <= amount)
+);
+CREATE UNIQUE INDEX open_item_source ON open_item (origin, source_id) WHERE source_id IS NOT NULL AND origin <> 'manual';
+CREATE INDEX open_item_list ON open_item (created_at DESC, id);
+CREATE INDEX open_item_partner ON open_item (legal_entity_id, partner_id, kind, due_date);
