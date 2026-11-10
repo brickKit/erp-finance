@@ -100,6 +100,18 @@ func fields(names ...string) map[string]sdkauthz.Field {
 	return out
 }
 
+// AccountFields are what an account list may filter and sort on.
+var AccountFields = []string{"id", "legal_entity_id", "code", "name", "category", "parent_id", "postable", "state",
+	"version", "updated_at"}
+
+// VoucherFields are what a voucher list may filter and sort on.
+var VoucherFields = []string{"id", "legal_entity_id", "number", "period", "business_date", "posting_date", "description",
+	"source", "state", "maker_id", "approver_id", "reason", "reverses_voucher_id", "reversed_by_id", "lines", "version",
+	"created_at", "updated_at"}
+
+// PeriodFields are what a period list may filter and sort on.
+var PeriodFields = []string{"legal_entity_id", "period", "state", "revision", "reason", "version", "updated_at"}
+
 func entity() map[string]sdkauthz.Dimension {
 	return map[string]sdkauthz.Dimension{DimLegalEntity: {Kind: sdkauthz.ValueSet, Column: "legal_entity_id"}}
 }
@@ -124,9 +136,9 @@ func Definitions() *sdkauthz.Definitions {
 	}
 	return &sdkauthz.Definitions{Component: ID,
 		Resources: []sdkauthz.Resource{
-			{Type: Accounts, ViewOperation: OpAccountRead, Dimensions: entity(), Fields: fields("id")},
-			{Type: Vouchers, ViewOperation: OpVoucherRead, Dimensions: entity(), Fields: fields("id")},
-			{Type: Periods, ViewOperation: OpPeriodRead, Dimensions: entity(), Fields: fields("legal_entity_id")},
+			{Type: Accounts, ViewOperation: OpAccountRead, Dimensions: entity(), Fields: fields(AccountFields...)},
+			{Type: Vouchers, ViewOperation: OpVoucherRead, Dimensions: entity(), Fields: fields(VoucherFields...)},
+			{Type: Periods, ViewOperation: OpPeriodRead, Dimensions: entity(), Fields: fields(PeriodFields...)},
 			{Type: OpenItems, ViewOperation: OpOpenItemRead, Dimensions: entityAndDepartment(), Fields: fields("id")},
 			{Type: SupplierInvoices, ViewOperation: OpSupplierInvRead, Dimensions: entityAndDepartment(), Fields: fields("id")},
 			{Type: System, ViewOperation: OpSysRead, Dimensions: map[string]sdkauthz.Dimension{},

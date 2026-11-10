@@ -19,11 +19,14 @@
 
 | 模块 | 负责 | 拥有的表 |
 | --- | --- | --- |
+| [`ledger`](internal/ledger/AGENTS.md) | 科目表、过账规则与映射、凭证的写入与过账（连续凭证号）、余额 | `account`、`account_mapping`、`mapping_version`、`voucher`、`voucher_line` |
+| [`periods`](internal/periods/AGENTS.md) | 会计期间与它的生命周期（PD01、PD02） | `period` |
+| [`vouchers`](internal/vouchers/AGENTS.md) | 手工凭证与它的生命周期（VC01–VC04） | （写 `ledger` 的表） |
 | [`orgunits`](internal/orgunits/AGENTS.md) | 部门投影（协议 02）：部门路径复制到未清项与票据上 | `org_realign`（投影本身在 SDK 的表里） |
 
 模块共用的（不属于某一个业务）：[`masterdata`](internal/masterdata/AGENTS.md)（事务外向主数据取证）、[`core`](internal/core/AGENTS.md)（名字、资源与操作的定义、错误与校验、生命周期表的通用写法、增量事实 `Fact`；表 `finance_fact` 留着每个增量事实给 `FactService.Read`）。
 
-**实现进度**（3.0.0 开发中，装配项目阶段计划 C4 的 P3）：现在只有骨架，用户面的路由都答“能力不支持”；科目与凭证、应收、供应商票据、付款认领、核销按 P3b–P3f 依次加进来，每加一个模块就在上面两张表里加一行。
+**实现进度**（3.0.0 开发中，装配项目阶段计划 C4 的 P3）：科目表、过账规则与映射、期间、手工凭证与余额已做（P3b）；应收、供应商票据、付款认领、核销按 P3c–P3f 依次加进来，还没做的路由答“能力不支持”，每加一个模块就在上面两张表里加一行。
 
 | 想改 | 从这里开始 | 然后 |
 | --- | --- | --- |

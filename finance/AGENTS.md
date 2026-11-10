@@ -18,7 +18,7 @@
 
 ## 依赖与被依赖
 
-- 依赖：`internal/core`、`internal/orgunits`。
+- 依赖：`internal/core`、`internal/ledger`、`internal/orgunits`、`internal/periods`、`internal/vouchers`。
 - 被依赖：`main.go`、外壳、`itest/`。
 - 模块不能反过来引用这里（会成环）：模块需要的名字放 `internal/core`。
 

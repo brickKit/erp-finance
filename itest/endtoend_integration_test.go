@@ -70,11 +70,16 @@ type fixture struct {
 	rt    *runtime.Runtime // the member's runtime
 
 	le, le2, d1, d2, customer, supplier, blocked string
+	// Shanghai's accounts by code (the chart step)
+	accounts map[string]map[string]any
 }
 
 func TestFinanceEndToEnd(t *testing.T) {
 	fx := start(t)
 	fx.notInThisVersion()
+	fx.chart()
+	fx.vouchers()
+	fx.periods()
 }
 
 // start makes the world, the stand-ins and mdm/org's stream, then migrates and runs the member.
@@ -170,6 +175,36 @@ func start(t *testing.T) *fixture {
 }
 
 var orgStream = events.Stream{Name: core.OrgStream, Partitions: 4}
+
+var shanghai, _ = time.LoadLocation("Asia/Shanghai")
+
+// today is Shanghai's business date.
+func (fx *fixture) today() string { return time.Now().In(shanghai).Format("2006-01-02") }
+
+func (fx *fixture) with(m map[string]any, k string, v any) map[string]any {
+	out := map[string]any{k: v}
+	for kk, vv := range m {
+		if kk != k {
+			out[kk] = vv
+		}
+	}
+	return out
+}
+
+// fact reads the payload of the incremental fact with the ID from the outbox.
+func (fx *fixture) fact(id, typ string) map[string]any {
+	return fx.factWhere(typ, "fact_id", id)
+}
+
+func (fx *fixture) factWhere(typ, key, value string) map[string]any {
+	fx.t.Helper()
+	var payload []byte
+	require.NoError(fx.t, fx.admin.QueryRow(fx.ctx, "SELECT payload FROM "+itSchema+".be_outbox WHERE type = $1 AND "+
+		"convert_from(payload, 'UTF8')::jsonb->>'"+key+"' = $2", typ, value).Scan(&payload), "%s with %s %s", typ, key, value)
+	var out map[string]any
+	require.NoError(fx.t, json.Unmarshal(payload, &out))
+	return out
+}
 
 // --- helpers ---
 

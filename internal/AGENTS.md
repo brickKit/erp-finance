@@ -8,6 +8,9 @@
 
 | 包 | 一句话 | 依赖（本组件内） |
 | --- | --- | --- |
+| `vouchers` | 手工凭证与它的生命周期（VC01–VC04） | `core`、`ledger`、`masterdata`、`periods` |
+| `ledger` | 科目表、过账规则与映射、凭证的写入与过账（连续凭证号）、余额 | `core` |
+| `periods` | 会计期间与它的生命周期（PD01、PD02） | `core` |
 | `orgunits` | 部门投影（协议 02） | `core`、`masterdata` |
 | `masterdata`（共用） | 事务外向主数据组件取证 | `core` |
 | `core`（共用） | 名字、资源与操作的定义、错误与校验、生命周期表、增量事实、`Base` | — |
@@ -16,8 +19,8 @@
 
 | 层 | 包 |
 | --- | --- |
-| 3 | `orgunits` |
-| 2 | `masterdata` |
+| 3 | `vouchers`、`orgunits` |
+| 2 | `ledger`、`periods`、`masterdata` |
 | 1 | `core` |
 
 核对：`go list -f '{{.Imports}}' ./internal/<包>`。
@@ -26,7 +29,7 @@
 
 - **每个模块的函数先收 `m *core.Base`**（组件的运行时：数据库、调用、事件、审计、日志），入口包的 `Module` 持有它、登记时适配；模块之间直接调对方导出的函数。
 - **名字在 `core`**：资源、操作、维度、事件类型、依赖的 ID、错误原因都在 `core/names.go`、`core/rules.go`；资源定义（`core.Definitions()`）是全组件一张表。
-- **生命周期是一张表**：认领、供应商票据、凭证在哪个状态能做什么，只在各自模块的 `lifecycle.go`（`core.Table`，写法照 `erp/purchase`，SF30：以后进 SDK）；变状态只经该模块的 `Transition`。
+- **生命周期是一张表**：认领、供应商票据、手工凭证、期间在哪个状态能做什么，只在各自模块的 `lifecycle.go`（`core.Table`，写法照 `erp/purchase`，SF30：以后进 SDK）；变状态只经该模块的 `Transition`。
 - **增量事实只经 `core.Fact`**：发事件与存进 `finance_fact` 在同一个事务。
 - **事务外取证、事务内写**：上游调用都在 `masterdata`，在事务之前；写入、审计（`core.Change`）与发件表在同一个事务。
 

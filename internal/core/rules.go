@@ -149,6 +149,18 @@ func Change(m *Base, ctx context.Context, tx db.Tx, actor, op, typ, id string, a
 	return err
 }
 
+// ChangeWith is Change with more change entries beside "after" (e.g. the document number a continuous series issued,
+// be-protocol P14.5).
+func ChangeWith(m *Base, ctx context.Context, tx db.Tx, actor, op, typ, id string, after any, more map[string]any) error {
+	changes := map[string]any{"after": after}
+	for k, v := range more {
+		changes[k] = v
+	}
+	_, err := m.RT.Audit.Write(ctx, tx, audit.Record{Category: audit.BusinessChange, Operation: op, Outcome: audit.Succeeded,
+		Actor: actor, Target: audit.TargetOf(typ, id, after), Changes: changes})
+	return err
+}
+
 // Emit writes an event into the outbox, in the transaction that changed the record (protocol 02, S2).
 func Emit(m *Base, ctx context.Context, tx db.Tx, typ, id string, version int64, legalEntity string, data any) error {
 	_, err := m.RT.Events.Emit(ctx, tx, Stream, events.Event{Type: typ, RecordID: id, Version: version,
