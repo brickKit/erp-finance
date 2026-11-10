@@ -13,7 +13,7 @@ dependencies:
     - mdm/currency@3.0.33
     - mdm/org@3.0.35
     - mdm/partner@3.0.40
-    - id: erp/purchase@3.0.1
+    - id: erp/purchase@3.0.2
       optional: true
 
 events:
@@ -89,6 +89,9 @@ configSchema:
         - info
         - warn
         - error
+      type: string
+    MATCH_TOLERANCES:
+      description: 'the supplier invoice matching''s tolerances per legal entity (JSON: legal entity ID -> {quantity_percent, price_percent}, decimal strings); a legal entity not named has 0'
       type: string
     OBJECT_STORE_ACCESS_KEY:
       type: string

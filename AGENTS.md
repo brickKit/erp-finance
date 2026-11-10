@@ -23,13 +23,14 @@
 | [`periods`](internal/periods/AGENTS.md) | 会计期间与它的生命周期（PD01、PD02） | `period` |
 | [`vouchers`](internal/vouchers/AGENTS.md) | 手工凭证与它的生命周期（VC01–VC04） | （写 `ledger` 的表） |
 | [`openitems`](internal/openitems/AGENTS.md) | 未清项：形成、查询；应收已形成的事实 | `open_item` |
+| [`supplierinvoices`](internal/supplierinvoices/AGENTS.md) | 供应商票据与三单匹配、应付、票据单价确认 | `supplier_invoice`、`supplier_invoice_line`、`invoiced_line`、`invoiced_movement` |
 | [`intake`](internal/intake/AGENTS.md) | 收到的事实：收件去重、过账工作项；已出账 → 应收 | `fact_received` |
 | [`facts`](internal/facts/AGENTS.md) | 系统面 `FactService.Read` | `finance_fact`（写入在 `core.Fact`） |
 | [`orgunits`](internal/orgunits/AGENTS.md) | 部门投影（协议 02）：部门路径复制到未清项与票据上 | `org_realign`（投影本身在 SDK 的表里） |
 
-模块共用的（不属于某一个业务）：[`masterdata`](internal/masterdata/AGENTS.md)（事务外向主数据取证）、[`core`](internal/core/AGENTS.md)（名字、资源与操作的定义、错误与校验、生命周期表的通用写法、增量事实 `Fact`）。
+模块共用的（不属于某一个业务）：[`masterdata`](internal/masterdata/AGENTS.md)（事务外取证：主数据、采购的匹配依据）、[`core`](internal/core/AGENTS.md)（名字、资源与操作的定义、错误与校验、生命周期表的通用写法、增量事实 `Fact`）。
 
-**实现进度**（3.0.0 开发中，装配项目阶段计划 C4 的 P3）：科目表、过账规则与映射、期间、手工凭证与余额已做（P3b）；已出账形成应收、未清项查询、`FactService.Read` 已做（P3c）；供应商票据、付款认领、核销、人工未清项按 P3d–P3f 依次加进来，还没做的路由答“能力不支持”，每加一个模块就在上面两张表里加一行。
+**实现进度**（3.0.0 开发中，装配项目阶段计划 C4 的 P3）：科目表、过账规则与映射、期间、手工凭证与余额已做（P3b）；已出账形成应收、未清项查询、`FactService.Read` 已做（P3c）；供应商票据与三单匹配已做（P3d）；付款认领、核销、人工未清项按 P3e–P3f 依次加进来，还没做的路由答“能力不支持”，每加一个模块就在上面两张表里加一行。
 
 | 想改 | 从这里开始 | 然后 |
 | --- | --- | --- |

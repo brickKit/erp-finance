@@ -15,9 +15,9 @@ import (
 func TestTheManifestDeclaresWhatTheSDKReads(t *testing.T) {
 	raw, err := os.ReadFile("../component.yaml")
 	require.NoError(t, err)
-	if p := launcher.ManifestProblems(raw, Definition(), nil); len(p) > 0 {
+	if p := launcher.ManifestProblems(raw, Definition(), Own); len(p) > 0 {
 		t.Errorf("component.yaml's configSchema differs from what the SDK reads:\n%v\nthe block:\n%s", p,
-			launcher.ConfigSchemaYAML(Definition(), nil))
+			launcher.ConfigSchemaYAML(Definition(), Own))
 	}
 }
 

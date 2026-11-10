@@ -163,3 +163,64 @@ CREATE TABLE open_item (
 CREATE UNIQUE INDEX open_item_source ON open_item (origin, source_id) WHERE source_id IS NOT NULL AND origin <> 'manual';
 CREATE INDEX open_item_list ON open_item (created_at DESC, id);
 CREATE INDEX open_item_partner ON open_item (legal_entity_id, partner_id, kind, due_date);
+
+-- Supplier invoices (docs/design.md, the supplier invoice table; SI01-SI05): an order invoice (every line an order
+-- line, matched) or an expense invoice (every line an expense account, approved). department_path is the org-tree
+-- fact of security 07, copied from the department.
+CREATE TABLE supplier_invoice (
+    id                     uuid PRIMARY KEY,
+    number                 text NOT NULL UNIQUE,
+    legal_entity_id        uuid NOT NULL,
+    supplier_id            uuid NOT NULL,
+    supplier_number        text NOT NULL,
+    invoice_date           date NOT NULL,
+    due_date               date NOT NULL,
+    currency               text NOT NULL,
+    kind                   text NOT NULL CHECK (kind IN ('order', 'expense')),
+    state                  text NOT NULL DEFAULT 'draft' CHECK (state IN ('draft', 'matched', 'mismatch', 'posted', 'cancelled')),
+    maker_id               text NOT NULL,
+    difference_approved_by text,
+    difference_reason      text,
+    open_item_id           uuid REFERENCES open_item (id),
+    voucher_id             uuid REFERENCES voucher (id),
+    department_id          uuid,
+    department_path        text,
+    search                 text NOT NULL DEFAULT '',
+    search_version         int NOT NULL DEFAULT 0,
+    version                bigint NOT NULL DEFAULT 1,
+    created_at             timestamptz NOT NULL DEFAULT now(),
+    updated_at             timestamptz NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX supplier_invoice_supplier_number ON supplier_invoice (legal_entity_id, supplier_id, supplier_number)
+    WHERE state <> 'cancelled';
+CREATE INDEX supplier_invoice_list ON supplier_invoice (created_at DESC, id);
+
+-- A supplier invoice line: an order line's quantity in the order line's unit, or an expense account; match is the
+-- last matching's result (SI02), null before one.
+CREATE TABLE supplier_invoice_line (
+    id                   uuid PRIMARY KEY,
+    invoice_id           uuid NOT NULL REFERENCES supplier_invoice (id),
+    line_no              int NOT NULL,
+    order_line_id        uuid,
+    expense_account_code text,
+    description          text,
+    quantity             numeric(19,6) NOT NULL CHECK (quantity > 0),
+    unit_price           numeric(19,6) NOT NULL CHECK (unit_price >= 0),
+    net                  numeric(19,4) NOT NULL,
+    tax                  numeric(19,4) NOT NULL CHECK (tax >= 0),
+    match                jsonb,
+    UNIQUE (invoice_id, line_no),
+    CHECK ((order_line_id IS NULL) <> (expense_account_code IS NULL))
+);
+
+-- What posted supplier invoices took of an order line (its unit and the base unit) and of a receipt movement (base
+-- unit): the next invoice's invoiceable quantity is net of it (SI02, SI03).
+CREATE TABLE invoiced_line (
+    order_line_id uuid PRIMARY KEY,
+    quantity      numeric(19,6) NOT NULL,
+    base_quantity numeric(19,6) NOT NULL
+);
+CREATE TABLE invoiced_movement (
+    movement_id   uuid PRIMARY KEY,
+    base_quantity numeric(19,6) NOT NULL
+);

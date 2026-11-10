@@ -18,15 +18,17 @@ import (
 
 // New is an open item to form: from an issued invoice (AR01), later a supplier invoice or a manual registration.
 type New struct {
-	LegalEntityID string
-	Kind          string
-	PartnerID     string
-	Currency      string
-	Amount        string
-	DueDate       string
-	Origin        string
-	Source        Source
-	VoucherID     string
+	LegalEntityID  string
+	Kind           string
+	PartnerID      string
+	Currency       string
+	Amount         string
+	DueDate        string
+	Origin         string
+	Source         Source
+	VoucherID      string
+	DepartmentID   *string
+	DepartmentPath *string
 	// OrderID is the sales order an invoice's receivable belongs to (erp/credit's branch), carried by the fact
 	OrderID *string
 }
@@ -40,9 +42,10 @@ func Form(m *core.Base, ctx context.Context, tx db.Tx, n New) (OpenItem, error) 
 		number = *n.Source.Number
 	}
 	if _, err := tx.Exec(ctx, `INSERT INTO open_item (id, legal_entity_id, kind, partner_id, currency, amount, due_date,
-		origin, source_kind, source_id, source_number, voucher_id, search, search_version) VALUES ($1, $2, $3, $4, $5, $6, $7,
-		$8, $9, $10, $11, $12, $13, $14)`, id, n.LegalEntityID, n.Kind, n.PartnerID, n.Currency, n.Amount, n.DueDate,
-		n.Origin, n.Source.Kind, n.Source.ID, n.Source.Number, n.VoucherID, search.Text(number), search.Version); err != nil {
+		origin, source_kind, source_id, source_number, voucher_id, search, search_version, department_id, department_path)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`, id, n.LegalEntityID, n.Kind,
+		n.PartnerID, n.Currency, n.Amount, n.DueDate, n.Origin, n.Source.Kind, n.Source.ID, n.Source.Number, n.VoucherID,
+		search.Text(number), search.Version, n.DepartmentID, n.DepartmentPath); err != nil {
 		return OpenItem{}, err
 	}
 	o, err := Get(ctx, tx, id, false)

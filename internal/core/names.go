@@ -93,7 +93,7 @@ const (
 
 // DepartmentTables are the tables that copy their department's path (internal/orgunits rewrites them when a
 // department moves).
-var DepartmentTables = []string{"open_item"}
+var DepartmentTables = []string{"open_item", "supplier_invoice"}
 
 func fields(names ...string) map[string]sdkauthz.Field {
 	out := map[string]sdkauthz.Field{}
@@ -116,6 +116,11 @@ var VoucherFields = []string{"id", "legal_entity_id", "number", "period", "busin
 var OpenItemFields = []string{"id", "legal_entity_id", "kind", "partner_id", "currency", "amount", "settled", "pay_claimed",
 	"available", "open_balance", "open", "due_date", "origin", "source", "state", "department_id", "claims", "allocations",
 	"version", "created_at", "updated_at"}
+
+// SupplierInvoiceFields are what a supplier invoice list may filter and sort on.
+var SupplierInvoiceFields = []string{"id", "number", "legal_entity_id", "supplier_id", "supplier_number", "invoice_date",
+	"due_date", "currency", "net", "tax", "gross", "state", "difference_approved_by", "open_item_id", "department_id",
+	"lines", "version", "created_at", "updated_at"}
 
 // PeriodFields are what a period list may filter and sort on.
 var PeriodFields = []string{"legal_entity_id", "period", "state", "revision", "reason", "version", "updated_at"}
@@ -148,7 +153,7 @@ func Definitions() *sdkauthz.Definitions {
 			{Type: Vouchers, ViewOperation: OpVoucherRead, Dimensions: entity(), Fields: fields(VoucherFields...)},
 			{Type: Periods, ViewOperation: OpPeriodRead, Dimensions: entity(), Fields: fields(PeriodFields...)},
 			{Type: OpenItems, ViewOperation: OpOpenItemRead, Dimensions: entityAndDepartment(), Fields: fields(OpenItemFields...)},
-			{Type: SupplierInvoices, ViewOperation: OpSupplierInvRead, Dimensions: entityAndDepartment(), Fields: fields("id")},
+			{Type: SupplierInvoices, ViewOperation: OpSupplierInvRead, Dimensions: entityAndDepartment(), Fields: fields(SupplierInvoiceFields...)},
 			{Type: System, ViewOperation: OpSysRead, Dimensions: map[string]sdkauthz.Dimension{},
 				Fields: map[string]sdkauthz.Field{}},
 		},

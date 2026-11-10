@@ -10,6 +10,7 @@ import (
 	openitems "github.com/brickKit/erp-finance/v3/internal/openitems"
 	orgunits "github.com/brickKit/erp-finance/v3/internal/orgunits"
 	periods "github.com/brickKit/erp-finance/v3/internal/periods"
+	supplierinvoices "github.com/brickKit/erp-finance/v3/internal/supplierinvoices"
 	vouchers "github.com/brickKit/erp-finance/v3/internal/vouchers"
 
 	"github.com/brickKit/be-sdk-go/v3/db"
@@ -31,7 +32,11 @@ type Module struct {
 
 // New builds the module from its runtime.
 func New(rt *runtime.Runtime) (*Module, error) {
-	return &Module{b: &core.Base{RT: rt}}, nil
+	b, err := core.NewBase(rt)
+	if err != nil {
+		return nil, err
+	}
+	return &Module{b: b}, nil
 }
 
 // Routes registers the user surface (contract/openapi.yaml).
@@ -43,38 +48,38 @@ func (m *Module) Routes(r *httpx.Routes) error {
 		return func(c *httpx.Context) error { return f(m.b, c) }
 	}
 	todo := core.Unsupported("this route")
-	add("GET", "/api/finance/accounts", core.OpAccountRead, h(ledger.ListAccounts))                                              // listAccounts
-	add("POST", "/api/finance/accounts", core.OpAccountManage, h(ledger.CreateAccount))                                          // createAccount
-	add("GET", "/api/finance/accounts/:id", core.OpAccountRead, h(ledger.GetAccount))                                            // getAccount
-	add("PATCH", "/api/finance/accounts/:id", core.OpAccountManage, h(ledger.UpdateAccount))                                     // updateAccount
-	add("GET", "/api/finance/posting-rules", core.OpAccountRead, h(ledger.ListPostingRules))                                     // listPostingRules
-	add("GET", "/api/finance/account-mappings/:legal_entity_id", core.OpAccountRead, h(ledger.GetMapping))                       // getMapping
-	add("PUT", "/api/finance/account-mappings/:legal_entity_id", core.OpAccountManage, h(ledger.PutMapping))                     // putMapping
-	add("GET", "/api/finance/periods", core.OpPeriodRead, h(periods.ListPeriods))                                                // listPeriods
-	add("POST", "/api/finance/periods/:legal_entity_id/:period/close", core.OpPeriodClose, periods.Action(m.b, periods.Close))   // closePeriod
-	add("POST", "/api/finance/periods/:legal_entity_id/:period/reopen", core.OpPeriodClose, periods.Action(m.b, periods.Reopen)) // reopenPeriod
-	add("GET", "/api/finance/vouchers", core.OpVoucherRead, h(vouchers.ListVouchers))                                            // listVouchers
-	add("POST", "/api/finance/vouchers", core.OpVoucherEdit, h(vouchers.CreateVoucher))                                          // createVoucher
-	add("GET", "/api/finance/vouchers/:id", core.OpVoucherRead, h(vouchers.GetVoucher))                                          // getVoucher
-	add("PATCH", "/api/finance/vouchers/:id", core.OpVoucherEdit, h(vouchers.UpdateVoucher))                                     // updateVoucher
-	add("POST", "/api/finance/vouchers/:id/submit", core.OpVoucherEdit, vouchers.Action(m.b, vouchers.Submit))                   // submitVoucher
-	add("POST", "/api/finance/vouchers/:id/approve", core.OpVoucherApprove, vouchers.Action(m.b, vouchers.Approve))              // approveVoucher
-	add("POST", "/api/finance/vouchers/:id/reject", core.OpVoucherApprove, vouchers.Action(m.b, vouchers.Reject))                // rejectVoucher
-	add("POST", "/api/finance/vouchers/:id/reverse", core.OpVoucherApprove, vouchers.Action(m.b, vouchers.Reverse))              // reverseVoucher
-	add("GET", "/api/finance/balances", core.OpVoucherRead, h(ledger.ListBalances))                                              // listBalances
-	add("GET", "/api/finance/open-items", core.OpOpenItemRead, h(openitems.ListOpenItems))                                       // listOpenItems
-	add("POST", "/api/finance/open-items", core.OpOpenItemEdit, todo)                                                            // createOpenItem
-	add("GET", "/api/finance/open-items/:id", core.OpOpenItemRead, h(openitems.GetOpenItem))                                     // getOpenItem
-	add("POST", "/api/finance/open-items/:id/approve", core.OpOpenItemApprove, todo)                                             // approveOpenItem
-	add("POST", "/api/finance/open-items/:id/cancel", core.OpOpenItemEdit, todo)                                                 // cancelOpenItem
-	add("GET", "/api/finance/supplier-invoices", core.OpSupplierInvRead, todo)                                                   // listSupplierInvoices
-	add("POST", "/api/finance/supplier-invoices", core.OpSupplierInvEdit, todo)                                                  // createSupplierInvoice
-	add("GET", "/api/finance/supplier-invoices/:id", core.OpSupplierInvRead, todo)                                               // getSupplierInvoice
-	add("PATCH", "/api/finance/supplier-invoices/:id", core.OpSupplierInvEdit, todo)                                             // updateSupplierInvoice
-	add("POST", "/api/finance/supplier-invoices/:id/match", core.OpSupplierInvEdit, todo)                                        // matchSupplierInvoice
-	add("POST", "/api/finance/supplier-invoices/:id/approve-difference", core.OpSupplierInvApprove, todo)                        // approveDifference
-	add("POST", "/api/finance/supplier-invoices/:id/post", core.OpSupplierInvEdit, todo)                                         // postSupplierInvoice
-	add("POST", "/api/finance/supplier-invoices/:id/cancel", core.OpSupplierInvEdit, todo)                                       // cancelSupplierInvoice
+	add("GET", "/api/finance/accounts", core.OpAccountRead, h(ledger.ListAccounts))                                                                         // listAccounts
+	add("POST", "/api/finance/accounts", core.OpAccountManage, h(ledger.CreateAccount))                                                                     // createAccount
+	add("GET", "/api/finance/accounts/:id", core.OpAccountRead, h(ledger.GetAccount))                                                                       // getAccount
+	add("PATCH", "/api/finance/accounts/:id", core.OpAccountManage, h(ledger.UpdateAccount))                                                                // updateAccount
+	add("GET", "/api/finance/posting-rules", core.OpAccountRead, h(ledger.ListPostingRules))                                                                // listPostingRules
+	add("GET", "/api/finance/account-mappings/:legal_entity_id", core.OpAccountRead, h(ledger.GetMapping))                                                  // getMapping
+	add("PUT", "/api/finance/account-mappings/:legal_entity_id", core.OpAccountManage, h(ledger.PutMapping))                                                // putMapping
+	add("GET", "/api/finance/periods", core.OpPeriodRead, h(periods.ListPeriods))                                                                           // listPeriods
+	add("POST", "/api/finance/periods/:legal_entity_id/:period/close", core.OpPeriodClose, periods.Action(m.b, periods.Close))                              // closePeriod
+	add("POST", "/api/finance/periods/:legal_entity_id/:period/reopen", core.OpPeriodClose, periods.Action(m.b, periods.Reopen))                            // reopenPeriod
+	add("GET", "/api/finance/vouchers", core.OpVoucherRead, h(vouchers.ListVouchers))                                                                       // listVouchers
+	add("POST", "/api/finance/vouchers", core.OpVoucherEdit, h(vouchers.CreateVoucher))                                                                     // createVoucher
+	add("GET", "/api/finance/vouchers/:id", core.OpVoucherRead, h(vouchers.GetVoucher))                                                                     // getVoucher
+	add("PATCH", "/api/finance/vouchers/:id", core.OpVoucherEdit, h(vouchers.UpdateVoucher))                                                                // updateVoucher
+	add("POST", "/api/finance/vouchers/:id/submit", core.OpVoucherEdit, vouchers.Action(m.b, vouchers.Submit))                                              // submitVoucher
+	add("POST", "/api/finance/vouchers/:id/approve", core.OpVoucherApprove, vouchers.Action(m.b, vouchers.Approve))                                         // approveVoucher
+	add("POST", "/api/finance/vouchers/:id/reject", core.OpVoucherApprove, vouchers.Action(m.b, vouchers.Reject))                                           // rejectVoucher
+	add("POST", "/api/finance/vouchers/:id/reverse", core.OpVoucherApprove, vouchers.Action(m.b, vouchers.Reverse))                                         // reverseVoucher
+	add("GET", "/api/finance/balances", core.OpVoucherRead, h(ledger.ListBalances))                                                                         // listBalances
+	add("GET", "/api/finance/open-items", core.OpOpenItemRead, h(openitems.ListOpenItems))                                                                  // listOpenItems
+	add("POST", "/api/finance/open-items", core.OpOpenItemEdit, todo)                                                                                       // createOpenItem
+	add("GET", "/api/finance/open-items/:id", core.OpOpenItemRead, h(openitems.GetOpenItem))                                                                // getOpenItem
+	add("POST", "/api/finance/open-items/:id/approve", core.OpOpenItemApprove, todo)                                                                        // approveOpenItem
+	add("POST", "/api/finance/open-items/:id/cancel", core.OpOpenItemEdit, todo)                                                                            // cancelOpenItem
+	add("GET", "/api/finance/supplier-invoices", core.OpSupplierInvRead, h(supplierinvoices.ListSupplierInvoices))                                          // listSupplierInvoices
+	add("POST", "/api/finance/supplier-invoices", core.OpSupplierInvEdit, h(supplierinvoices.CreateSupplierInvoice))                                        // createSupplierInvoice
+	add("GET", "/api/finance/supplier-invoices/:id", core.OpSupplierInvRead, h(supplierinvoices.GetSupplierInvoice))                                        // getSupplierInvoice
+	add("PATCH", "/api/finance/supplier-invoices/:id", core.OpSupplierInvEdit, h(supplierinvoices.UpdateSupplierInvoice))                                   // updateSupplierInvoice
+	add("POST", "/api/finance/supplier-invoices/:id/match", core.OpSupplierInvEdit, supplierinvoices.Action(m.b, supplierinvoices.Match))                   // matchSupplierInvoice
+	add("POST", "/api/finance/supplier-invoices/:id/approve-difference", core.OpSupplierInvApprove, supplierinvoices.Action(m.b, supplierinvoices.Approve)) // approveDifference
+	add("POST", "/api/finance/supplier-invoices/:id/post", core.OpSupplierInvEdit, supplierinvoices.Action(m.b, supplierinvoices.Post))                     // postSupplierInvoice
+	add("POST", "/api/finance/supplier-invoices/:id/cancel", core.OpSupplierInvEdit, supplierinvoices.Action(m.b, supplierinvoices.Cancel))                 // cancelSupplierInvoice
 	// in the contract, not in this version (D75; docs/design.md, "实现状态")
 	add("POST", "/api/finance/closings", core.OpPeriodClose, core.Unsupported("a closing batch"))
 	add("POST", "/api/finance/revaluations", core.OpPeriodClose, core.Unsupported("foreign currency revaluation"))

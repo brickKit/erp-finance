@@ -38,6 +38,7 @@ import (
 	"github.com/brickKit/be-sdk-go/v3/launcher"
 	"github.com/brickKit/be-sdk-go/v3/runtime"
 	"github.com/brickKit/be-sdk-go/v3/sectest"
+	purchasev3 "github.com/brickKit/erp-purchase/contract/v3/gen/go/be/erp/purchase/v3"
 	currencyv3 "github.com/brickKit/mdm-currency/contract/v3/gen/go/be/mdm/currency/v3"
 	orgv3 "github.com/brickKit/mdm-org/contract/v3/gen/go/be/mdm/org/v3"
 	partnerv3 "github.com/brickKit/mdm-partner/contract/v3/gen/go/be/mdm/partner/v3"
@@ -54,6 +55,7 @@ const (
 	itOrg      = "localhost:19120"
 	itPartner  = "localhost:19121"
 	itCurrency = "localhost:19122"
+	itPurchase = "localhost:19123"
 	itSchema   = "erp_finance_it"
 )
 
@@ -72,6 +74,8 @@ type fixture struct {
 	le, le2, d1, d2, customer, supplier, blocked string
 	// Shanghai's accounts by code (the chart step)
 	accounts map[string]map[string]any
+	// erp/purchase's match basis
+	purchase *purchaseStandIn
 }
 
 func TestFinanceEndToEnd(t *testing.T) {
@@ -81,6 +85,7 @@ func TestFinanceEndToEnd(t *testing.T) {
 	fx.vouchers()
 	fx.periods()
 	fx.receivables()
+	fx.supplierInvoices()
 }
 
 // start makes the world, the stand-ins and mdm/org's stream, then migrates and runs the member.
@@ -110,7 +115,7 @@ func start(t *testing.T) *fixture {
 		fx.le2: {"id": fx.le2, "code": "BJ", "state": "active", "timezone": "Asia/Shanghai", "base_currency": "CNY",
 			"version": int64(1)}},
 		units: map[string]map[string]any{fx.d1: fx.unit(fx.d1, fx.le+"/"+fx.d1, 1), fx.d2: fx.unit(fx.d2, fx.le+"/"+fx.d2, 1)}}
-	portFree(t, itPort, itSystem, itOrg, itPartner, itCurrency)
+	portFree(t, itPort, itSystem, itOrg, itPartner, itCurrency, itPurchase)
 	serve(t, itOrg, w, core.Org, func(s *grpc.Server) { orgv3.RegisterSourceServiceServer(s, fx.org) })
 	serve(t, itPartner, w, core.Partner, func(s *grpc.Server) {
 		p := &partnerStandIn{names: map[string]string{fx.customer: "上海客户", fx.supplier: "上海供应商", fx.blocked: "暂停的伙伴"},
@@ -119,6 +124,8 @@ func start(t *testing.T) *fixture {
 		partnerv3.RegisterPartnerServiceServer(s, p)
 	})
 	serve(t, itCurrency, w, core.Currency, func(s *grpc.Server) { currencyv3.RegisterSourceServiceServer(s, currencyStandIn{}) })
+	fx.purchase = &purchaseStandIn{lines: map[string]*purchasev3.BasisLine{}}
+	serve(t, itPurchase, w, core.Purchase, func(s *grpc.Server) { purchasev3.RegisterMatchServiceServer(s, fx.purchase) })
 
 	// a clean stream each run (earlier runs and cells leave events on the shared NATS)
 	js, err := jetstream.Connect(natsURL, "finance-it-clean")
@@ -138,7 +145,9 @@ func start(t *testing.T) *fixture {
 		"PG_USER": u.User.Username(), "PG_PASSWORD": pw, "PG_SCHEMA": itSchema, "PG_OWNER_USER": u.User.Username(),
 		"PG_OWNER_PASSWORD": pw, "BUS_URL": natsURL, "IMPLEMENTATION_INSTANCE": ids.New().String(),
 		"MDM_ORG_GRPC_ENDPOINT": "http://" + itOrg, "MDM_PARTNER_GRPC_ENDPOINT": "http://" + itPartner,
-		"MDM_CURRENCY_GRPC_ENDPOINT": "http://" + itCurrency} {
+		"MDM_CURRENCY_GRPC_ENDPOINT": "http://" + itCurrency, "ERP_PURCHASE_GRPC_ENDPOINT": "http://" + itPurchase,
+		// Shanghai takes 5 % more quantity than invoiceable, no price difference; Beijing declares nothing (0)
+		"MATCH_TOLERANCES": `{"` + fx.le + `": {"quantity_percent": "5", "price_percent": "0"}}`} {
 		env[k] = v
 	}
 	var logs bytes.Buffer

@@ -2,16 +2,18 @@
 
 package itest
 
-// The stand-ins of the integration test: the master data components, each speaking its published contract over mTLS.
+// The stand-ins of the integration test: the master data components and erp/purchase's match basis, each speaking its published contract over mTLS.
 
 import (
 	"context"
 	"encoding/json"
 	"sync"
 
+	purchasev3 "github.com/brickKit/erp-purchase/contract/v3/gen/go/be/erp/purchase/v3"
 	currencyv3 "github.com/brickKit/mdm-currency/contract/v3/gen/go/be/mdm/currency/v3"
 	orgv3 "github.com/brickKit/mdm-org/contract/v3/gen/go/be/mdm/org/v3"
 	partnerv3 "github.com/brickKit/mdm-partner/contract/v3/gen/go/be/mdm/partner/v3"
+	"google.golang.org/protobuf/proto"
 )
 
 // --- mdm/org: legal entities and departments ---
@@ -111,4 +113,30 @@ func (currencyStandIn) Read(_ context.Context, in *currencyv3.ReadRequest) (*cur
 		out.Results = append(out.Results, r)
 	}
 	return out, nil
+}
+
+// purchaseStandIn is erp/purchase's MatchService: the basis of the order lines the test set, as they stand.
+type purchaseStandIn struct {
+	purchasev3.UnimplementedMatchServiceServer
+	mu    sync.Mutex
+	lines map[string]*purchasev3.BasisLine
+}
+
+func (p *purchaseStandIn) Basis(_ context.Context, in *purchasev3.BasisRequest) (*purchasev3.BasisResponse, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	out := &purchasev3.BasisResponse{}
+	for _, id := range in.GetOrderLineIds() {
+		if l, ok := p.lines[id]; ok {
+			out.Lines = append(out.Lines, proto.Clone(l).(*purchasev3.BasisLine))
+		}
+	}
+	return out, nil
+}
+
+// set puts or changes an order line's basis.
+func (p *purchaseStandIn) set(l *purchasev3.BasisLine) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.lines[l.GetOrderLineId()] = l
 }

@@ -59,6 +59,7 @@ var (
 	UUIDForm     = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 	CurrencyForm = regexp.MustCompile(`^[A-Z]{3}$`)
 	DateForm     = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
+	DecimalForm  = regexp.MustCompile(`^[0-9]+(\.[0-9]+)?$`)
 )
 
 // DocFacts are the facts of an open item's or a supplier invoice's two dimensions; one without a department has none
@@ -209,4 +210,22 @@ func Times(a, b string, scale int32) string {
 	var r apd.Decimal
 	_, _ = apd.BaseContext.WithPrecision(80).Mul(&r, x, y)
 	return money.Format(&r, scale)
+}
+
+// Sum is the exact sum of decimals.
+func Sum(xs ...string) string {
+	var r apd.Decimal
+	for _, x := range xs {
+		d, _, _ := apd.NewFromString(x)
+		_, _ = apd.BaseContext.WithPrecision(80).Add(&r, &r, d)
+	}
+	r.Reduce(&r)
+	return r.Text('f')
+}
+
+// Cmp compares decimals: -1, 0 or 1.
+func Cmp(a, b string) int {
+	x, _, _ := apd.NewFromString(a)
+	y, _, _ := apd.NewFromString(b)
+	return x.Cmp(y)
 }

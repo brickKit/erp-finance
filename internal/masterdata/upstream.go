@@ -8,6 +8,7 @@ import (
 
 	"github.com/brickKit/be-sdk-go/v3/calls"
 	"github.com/brickKit/be-sdk-go/v3/errs"
+	purchasev3 "github.com/brickKit/erp-purchase/contract/v3/gen/go/be/erp/purchase/v3"
 	currencyv3 "github.com/brickKit/mdm-currency/contract/v3/gen/go/be/mdm/currency/v3"
 	orgv3 "github.com/brickKit/mdm-org/contract/v3/gen/go/be/mdm/org/v3"
 	partnerv3 "github.com/brickKit/mdm-partner/contract/v3/gen/go/be/mdm/partner/v3"
@@ -143,4 +144,32 @@ func CurrencyScale(m *core.Base, ctx context.Context, code string) (int32, error
 		return 0, core.ErrCurrency.New("currency " + code + " is not active")
 	}
 	return cur.MinorUnit, nil
+}
+
+// PurchaseDeployed says whether erp/purchase is in the assembly (optional: without it an order invoice cannot be
+// registered, SI02).
+func PurchaseDeployed(m *core.Base) bool {
+	_, ok := m.RT.GRPC(core.Purchase)
+	return ok
+}
+
+// MatchBasis reads the order lines' match basis from erp/purchase (D50), keyed by order line; a line erp/purchase does
+// not know is absent.
+func MatchBasis(m *core.Base, ctx context.Context, lineIDs []string) (map[string]*purchasev3.BasisLine, error) {
+	out := map[string]*purchasev3.BasisLine{}
+	if len(lineIDs) == 0 {
+		return out, nil
+	}
+	c, err := Conn(m, core.Purchase)
+	if err != nil {
+		return nil, err
+	}
+	res, err := purchasev3.NewMatchServiceClient(c).Basis(ctx, &purchasev3.BasisRequest{OrderLineIds: lineIDs}, calls.Idempotent())
+	if err != nil {
+		return nil, err
+	}
+	for _, l := range res.GetLines() {
+		out[l.GetOrderLineId()] = l
+	}
+	return out, nil
 }

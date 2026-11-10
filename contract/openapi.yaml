@@ -374,6 +374,7 @@ components:
             properties:
               id: {type: string, format: uuid}
               order_line_id: {type: [string, 'null']}
+              expense_account_code: {type: [string, 'null'], description: an expense line's account}
               description: {type: [string, 'null']}
               quantity: {type: string}
               unit_price: {type: string}
