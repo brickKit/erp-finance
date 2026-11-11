@@ -11,7 +11,7 @@
 | `proto/be/erp/finance/v3/finance.proto` | `ClaimService`（付款认领：认领、续期、确认、释放、读取；到期未清项，给收付款）；`FactService.Read`（按事实身份读回增量事实） |
 | `gen/go/be/erp/finance/v3/` | Go 代码，包 `financev3`；模块 `github.com/brickKit/erp-finance/contract/v3` |
 | `python/` | Python 包 `contract-erp-finance`，模块 `be.erp.finance.v3` |
-| `events/shared/` | **共享契约**：会计事实 `accounting_fact.v1`、资金事实 `fund_fact.v1`。来源组件（成本、收付款……）在自己的流上用自己的事件类型（`<领域>.<来源>.accounting_fact.v1`、`…fund_fact.v1`）发布这个形状；财务按装配清单订阅 |
+| `events/shared/` | **共享契约**：会计事实 `accounting_fact.v1`、资金事实 `fund_fact.v1`。来源组件（成本、收付款……）在自己的流上用自己的事件类型（`<领域>.<来源>.accounting_fact.v1`、`…fund_fact.v1`）发布这个形状：来源的 schema 只写一个指向共享 schema `$id` 的 `$ref`，不复制；Go 的来源在测试里加载包 `events` 的 `Shared`（`embed`，alpha.3 起）核对自己发布的事件。财务按装配清单订阅 |
 | `events/` | 流 `erp.finance`：凭证已过账、应收已形成、已核销、应收结清、减少、重开、票据单价确认与冲回（增量事实）；期间（完整状态） |
 | `openapi.yaml` | 用户面；每个路由的操作写在 `x-operation` |
 
