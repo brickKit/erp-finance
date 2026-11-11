@@ -124,6 +124,7 @@ func (fx *fixture) supplierInvoices() {
 	lines := inv["lines"].([]any)
 	pc := fx.fact(at(lines[0], "id").(string), core.PriceConfirmed)
 	assert.Equal(t, "8.333333", pc["unit_price"])
+	assert.Equal(t, inv["invoice_date"], pc["business_date"], "erp/costing dates its adjustment by the invoice (IC29)")
 	assert.Equal(t, r1, at(pc, "movements", 0, "receipt_line_id"))
 	assert.Equal(t, "60", at(pc, "movements", 0, "base_quantity"))
 	assert.Equal(t, "36", at(pc, "movements", 1, "base_quantity"))

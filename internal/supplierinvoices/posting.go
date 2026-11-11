@@ -155,5 +155,6 @@ func invoiced(m *core.Base, ctx context.Context, tx db.Tx, v Invoice, l Line, b 
 		"fact_id": l.ID, "invoice_id": v.ID, "legal_entity_id": v.LegalEntityID, "supplier_id": v.SupplierID,
 		"order_id": b.GetOrderId(), "order_line_id": *l.OrderLineID, "movements": movements,
 		"unit_price": core.Per(core.Times(l.UnitPrice, b.GetOrderedQuantity(), 12), b.GetOrderedBaseQuantity(), core.PriceScale),
-		"currency":   v.Currency, "price_basis": "net_of_tax", "recorded_at": canon.Time(time.Now())})
+		"currency":   v.Currency, "price_basis": "net_of_tax", "business_date": v.InvoiceDate,
+		"recorded_at": canon.Time(time.Now())})
 }
