@@ -52,6 +52,35 @@ func (fx *fixture) accountingFacts() {
 	assert.Equal(t, month(-1)[:7]+"-01", vi["posting_date"])
 	assert.Equal(t, "72", at(vi, "lines", 0, "base_amount"))
 
+	// AF01, AF02: a transfer is a pair (protocol 05): its going out puts the money in transit, its arrival takes it
+	// out again; one transfer document is the source of both
+	rules := map[string]any{}
+	for _, r := range fx.get("/api/finance/posting-rules")["rules"].([]any) {
+		rules[at(r, "rule_key").(string)] = at(r, "roles")
+	}
+	assert.Equal(t, map[string]any{"in_transit": "debit", "bank": "credit"}, rules["fund_transfer_out"])
+	assert.Equal(t, map[string]any{"bank": "debit", "in_transit": "credit"}, rules["fund_transfer_in"])
+	assert.NotContains(t, rules, "fund_transfer", "a transfer is never one fact")
+	fx.account("1012", "在途资金", "asset", "")
+	fx.account("1002.2", "银行存款-工行", "asset", "")
+	m = fx.get("/api/finance/account-mappings/" + fx.le)
+	m["entries"] = append(m["entries"].([]any),
+		map[string]any{"rule_key": "fund_transfer_out", "role": "in_transit", "account_code": "1012"},
+		map[string]any{"rule_key": "fund_transfer_out", "role": "bank", "account_code": "1002"},
+		map[string]any{"rule_key": "fund_transfer_in", "role": "bank", "account_code": "1002.2"},
+		map[string]any{"rule_key": "fund_transfer_in", "role": "in_transit", "account_code": "1012"})
+	code, out = fx.alice.do("PUT", "/api/finance/account-mappings/"+fx.le, m)
+	require.Equal(t, 200, code, out)
+	out1 := fx.accounting("fund_transfer_out", map[string]any{"in_transit": "1000", "bank": "1000"}, "CNY", nil, fx.today())
+	in1 := fx.accounting("fund_transfer_in", map[string]any{"bank": "1000", "in_transit": "1000"}, "CNY", nil, fx.today())
+	in1["source"] = out1["source"]
+	for _, f := range []map[string]any{out1, in1} {
+		fx.publishFact(paymentStream, accountingFact, core.Payment, f["fact_id"].(string), f)
+		fx.posted(f["fact_id"].(string))
+	}
+	fx.assertLines(out1["fact_id"].(string), map[string]string{"1012 debit": "1000", "1002 credit": "1000"})
+	fx.assertLines(in1["fact_id"].(string), map[string]string{"1002.2 debit": "1000", "1012 credit": "1000"})
+
 	// AF02: a rule key the catalog has not waits; an unbalanced fact is not posted
 	unknown := fx.accounting("payroll_lock", map[string]any{"salary": "1"}, "CNY", nil, fx.today())
 	fx.publishFact(paymentStream, accountingFact, core.Payment, unknown["fact_id"].(string), unknown)

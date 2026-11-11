@@ -21,9 +21,11 @@ var Rules = map[string]map[string]string{
 	"manual_receivable": {"receivable": "debit", "counter": "credit"},
 	"manual_payable":    {"counter": "debit", "payable": "credit"},
 	// erp/payment's accounting facts (AF02): money moved between the company's accounts, a bank's charges, its interest
-	"fund_transfer": {"bank_in": "debit", "bank_out": "credit"},
-	"bank_charge":   {"expense": "debit", "bank": "credit"},
-	"bank_interest": {"bank": "debit", "income": "credit"},
+	// a transfer is a pair (protocol 05): going out, the money is in transit; arrived, in the other account
+	"fund_transfer_out": {"in_transit": "debit", "bank": "credit"},
+	"fund_transfer_in":  {"bank": "debit", "in_transit": "credit"},
+	"bank_charge":       {"expense": "debit", "bank": "credit"},
+	"bank_interest":     {"bank": "debit", "income": "credit"},
 }
 
 // RuleKeys are the rule keys in order.

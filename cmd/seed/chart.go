@@ -12,7 +12,7 @@ type account struct{ code, name, category, parent string }
 // demoChart is a generic demo chart, the same codes in every legal entity: not any country's standard chart.
 var demoChart = []account{
 	{"1000", "资产", "asset", ""}, {"1001", "库存现金", "asset", "1000"}, {"1002", "银行存款", "asset", "1000"},
-	{"1012", "其他货币资金", "asset", "1000"}, {"1122", "应收账款", "asset", "1000"}, {"1221", "其他应收款", "asset", "1000"},
+	{"1012", "在途资金", "asset", "1000"}, {"1122", "应收账款", "asset", "1000"}, {"1221", "其他应收款", "asset", "1000"},
 	{"1401", "材料采购", "asset", "1000"}, {"1405", "库存商品", "asset", "1000"}, {"1601", "固定资产", "asset", "1000"},
 	{"2000", "负债", "liability", ""}, {"2202", "应付账款", "liability", "2000"}, {"2211", "应付职工薪酬", "liability", "2000"},
 	{"2221", "应交税费", "liability", "2000"}, {"2221.01", "应交税费-进项税额", "liability", "2221"},
@@ -29,7 +29,7 @@ var headings = map[string]bool{"1000": true, "2000": true, "2221": true, "4000":
 // roleAccounts maps every posting rule's role to the demo chart; counter (the manual open items) is the one each item
 // names, so it is not mapped.
 var roleAccounts = map[string]string{"receivable": "1122", "revenue": "6001", "output_tax": "2221.02", "purchase": "1401",
-	"input_tax": "2221.01", "payable": "2202", "bank": "1002", "suspense": "2249", "bank_in": "1002", "bank_out": "1012",
+	"input_tax": "2221.01", "payable": "2202", "bank": "1002", "suspense": "2249", "in_transit": "1012",
 	"expense": "6603", "income": "6603"}
 
 // chart makes the legal entity's missing accounts and sets the mapping when it differs.
