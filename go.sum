@@ -46,8 +46,8 @@ github.com/brickKit/be-sdk-go/v3 v3.0.0-alpha.121 h1:bI8ZLqaOo2hFJ6YMLhOgE/iIGgA
 github.com/brickKit/be-sdk-go/v3 v3.0.0-alpha.121/go.mod h1:6behnQqytEEyQQCVsVSL2CVhENpeHB+jQN45dpKttfI=
 github.com/brickKit/contract-infra-authz/v3 v3.0.0-alpha.6 h1:9Ju2Lp3HXFCc3FSF5oVioGx0DPowi63gVXH5MeJnA8k=
 github.com/brickKit/contract-infra-authz/v3 v3.0.0-alpha.6/go.mod h1:21N0lZKoL1STxtsx5Yi9Wh8cJ32gtsQuVF52oxMWaps=
-github.com/brickKit/erp-finance/contract/v3 v3.0.0-alpha.1 h1:fdoV/vK87H+cwSCptSrdhT3zicHz9e0EtuL5YIikQ0A=
-github.com/brickKit/erp-finance/contract/v3 v3.0.0-alpha.1/go.mod h1:8yvRsMNoIdHpjMq8i7pmQAW7sXZAhZ+/LyPZxkqneOI=
+github.com/brickKit/erp-finance/contract/v3 v3.0.0-alpha.2 h1:iLW+wmx4G19w6C0TEhntxXuppI1MC6PouWAekMnBXS4=
+github.com/brickKit/erp-finance/contract/v3 v3.0.0-alpha.2/go.mod h1:8yvRsMNoIdHpjMq8i7pmQAW7sXZAhZ+/LyPZxkqneOI=
 github.com/brickKit/erp-purchase/contract/v3 v3.0.0-alpha.4 h1:bEc3v1aPkRcfhGt0OAw+MZaE+XEhtr1OSGQq76aeazc=
 github.com/brickKit/erp-purchase/contract/v3 v3.0.0-alpha.4/go.mod h1:zPIOufxsFvTrvDxVjs3WKLI2V9dsxZJQ9DxHT2l6Wtg=
 github.com/brickKit/infra-audit/contract/v3 v3.0.0-alpha.2 h1:0snoszyg1imd9WGsK7I2H0lGNM6CKDOoE06D2jn/4G4=
