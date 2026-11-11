@@ -27,10 +27,12 @@ var demoChart = []account{
 var headings = map[string]bool{"1000": true, "2000": true, "2221": true, "4000": true}
 
 // roleAccounts maps every posting rule's role to the demo chart; counter (the manual open items) is the one each item
-// names, so it is not mapped.
+// names, so it is not mapped. The goods received not invoiced (grni) is the purchase account the supplier invoice
+// debits, so a receipt valued and its invoice clear each other there; the variance is in the cost of sales.
 var roleAccounts = map[string]string{"receivable": "1122", "revenue": "6001", "output_tax": "2221.02", "purchase": "1401",
 	"input_tax": "2221.01", "payable": "2202", "bank": "1002", "suspense": "2249", "in_transit": "1012",
-	"expense": "6603", "income": "6603"}
+	"expense": "6603", "income": "6603", "inventory": "1405", "grni": "1401", "cost_of_sales": "6401",
+	"variance": "6401"}
 
 // chart makes the legal entity's missing accounts and sets the mapping when it differs.
 func chart(c client, e *entity) {

@@ -61,6 +61,17 @@ func (fx *fixture) accountingFacts() {
 	assert.Equal(t, map[string]any{"in_transit": "debit", "bank": "credit"}, rules["fund_transfer_out"])
 	assert.Equal(t, map[string]any{"bank": "debit", "in_transit": "credit"}, rules["fund_transfer_in"])
 	assert.NotContains(t, rules, "fund_transfer", "a transfer is never one fact")
+	// the cost rules erp/costing posts under (C5): an adjustment up or down is two rules, amounts are never negative
+	for rule, roles := range map[string]map[string]any{
+		"inventory_receipt":    {"inventory": "debit", "grni": "credit"},
+		"cost_of_sales":        {"cost_of_sales": "debit", "inventory": "credit"},
+		"cost_of_sales_return": {"inventory": "debit", "cost_of_sales": "credit"},
+		"inventory_return":     {"grni": "debit", "inventory": "credit"},
+		"cost_adjustment_up":   {"inventory": "debit", "variance": "debit", "grni": "credit"},
+		"cost_adjustment_down": {"grni": "debit", "inventory": "credit", "variance": "credit"},
+	} {
+		assert.Equal(t, roles, rules[rule], rule)
+	}
 	fx.account("1012", "在途资金", "asset", "")
 	fx.account("1002.2", "银行存款-工行", "asset", "")
 	m = fx.get("/api/finance/account-mappings/" + fx.le)

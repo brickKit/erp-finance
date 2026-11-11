@@ -26,6 +26,16 @@ var Rules = map[string]map[string]string{
 	"fund_transfer_in":  {"bank": "debit", "in_transit": "credit"},
 	"bank_charge":       {"expense": "debit", "bank": "credit"},
 	"bank_interest":     {"bank": "debit", "income": "credit"},
+	// erp/costing's accounting facts (protocol 05b): a receipt valued (the goods received, not invoiced yet), the cost
+	// of what went out and came back, a purchase return, and the adjustments when a receipt's price source is
+	// replaced; the part of an adjustment whose goods went out already is the variance. Amounts are never negative,
+	// so an adjustment up and one down are two rules.
+	"inventory_receipt":    {"inventory": "debit", "grni": "credit"},
+	"cost_of_sales":        {"cost_of_sales": "debit", "inventory": "credit"},
+	"cost_of_sales_return": {"inventory": "debit", "cost_of_sales": "credit"},
+	"inventory_return":     {"grni": "debit", "inventory": "credit"},
+	"cost_adjustment_up":   {"inventory": "debit", "variance": "debit", "grni": "credit"},
+	"cost_adjustment_down": {"grni": "debit", "inventory": "credit", "variance": "credit"},
 }
 
 // RuleKeys are the rule keys in order.
