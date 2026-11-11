@@ -12,8 +12,9 @@
 | [`internal/`](internal/AGENTS.md) | 业务：下面的表里每个模块一个包；模块之间的依赖表在它的 `AGENTS.md`。Go 的 `internal` 让别的组件编译期就引用不了（决定 0101） |
 | [`itest/`](itest/AGENTS.md) | 集成测试，按业务流程分文件；它的 `AGENTS.md` 是测试索引（文件 → 流程 → 规则编号） |
 | `finance/migrations/` | 表，整个组件一套（迁移顺序是全组件的，不按模块拆） |
-| `contract/` | 本组件发布的契约，单独的模块：`contract/proto/`、`contract/events/`（含给来源组件的共享会计事实契约 `events/shared/`）、`contract/openapi.yaml` |
+| `contract/` | 本组件发布的契约，单独的模块：`contract/proto/`、`contract/events/`（含给来源组件的共享会计事实契约 `contract/events/shared/`）、`contract/openapi.yaml` |
 | `docs/` | 设计（规则的正文；各层的 `AGENTS.md` 只指过去，不抄） |
+| `cmd/seed/` | 种子（`make seed`）：角色与两个财务账号的范围、三个法人的演示科目表与映射、各种状态的手工凭证、供应商票据、人工未清项、关闭与重开的月份；应收由账单种子的已出账形成 |
 
 业务模块（`internal/` 下）：
 
@@ -33,7 +34,7 @@
 
 模块共用的（不属于某一个业务）：[`masterdata`](internal/masterdata/AGENTS.md)（事务外取证：主数据、采购的匹配依据）、[`core`](internal/core/AGENTS.md)（名字、资源与操作的定义、错误与校验、生命周期表的通用写法、增量事实 `Fact`）。
 
-**实现进度**（3.0.0 开发中）：契约里的能力都已实现；本版不做的路由（关账批次、外币重估、放行台账）答“能力不支持”。种子数据与发布在装配项目阶段计划 C4 的 P4、P5。加一个模块就在上面两张表里加一行。
+**实现进度**（3.0.0 开发中）：契约里的能力都已实现；本版不做的路由（关账批次、外币重估、放行台账）答“能力不支持”。种子在 `cmd/seed/`；发布在装配项目阶段计划 C4 的 P5。加一个模块就在上面两张表里加一行。
 
 | 想改 | 从这里开始 | 然后 |
 | --- | --- | --- |
