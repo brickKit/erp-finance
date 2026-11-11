@@ -60,7 +60,7 @@ func (fx *fixture) settlement() {
 	r2 := fx.fund("receipt", "800", &fx.customer, nil, nil)
 	fx.publishFact(paymentStream, fundFact, core.Payment, r2["fact_id"].(string), r2)
 	fx.posted(r2["fact_id"].(string))
-	assert.Equal(t, "settled", fx.get("/api/finance/open-items/"+i1)["state"])
+	assert.Equal(t, "settled", fx.get("/api/finance/open-items/" + i1)["state"])
 	credit := fx.openItemOf(r2["fact_id"].(string))
 	assert.Equal(t, "credit_balance", credit["kind"])
 	assert.Equal(t, "120", credit["amount"])
@@ -132,8 +132,8 @@ func (fx *fixture) settlement() {
 	v2 := fx.fund("reversal", "500", &fx.customer, nil, r1["fact_id"])
 	fx.publishFact(paymentStream, fundFact, core.Payment, v2["fact_id"].(string), v2)
 	fx.posted(v2["fact_id"].(string))
-	assert.Equal(t, "50", fx.get("/api/finance/open-items/"+i3)["open_balance"])
-	assert.Equal(t, "450", fx.get("/api/finance/open-items/"+i1)["open_balance"])
+	assert.Equal(t, "50", fx.get("/api/finance/open-items/" + i3)["open_balance"])
+	assert.Equal(t, "450", fx.get("/api/finance/open-items/" + i1)["open_balance"])
 	assert.Equal(t, "450", fx.factWhere(core.ReceivableReopened, "open_item_id", i1)["open_balance"])
 	assert.Equal(t, "50", fx.factWhere(core.ReceivableReopened, "open_item_id", i3)["open_balance"])
 
@@ -149,7 +149,7 @@ func (fx *fixture) settlement() {
 	fx.publishFact(paymentStream, fundFact, core.Payment, r3id, r3)
 	fx.posted(r3id)
 	fx.posted(v3["fact_id"].(string))
-	assert.Equal(t, "50", fx.get("/api/finance/open-items/"+i3)["open_balance"], "allocated, then reversed")
+	assert.Equal(t, "50", fx.get("/api/finance/open-items/" + i3)["open_balance"], "allocated, then reversed")
 
 	// ST03, ST05: money from a partner with no receivable is its credit balance; reversed, the credit balance is cancelled
 	r4 := fx.fund("receipt", "40", &fx.supplier, nil, nil)
@@ -160,7 +160,7 @@ func (fx *fixture) settlement() {
 	v4 := fx.fund("reversal", "40", &fx.supplier, nil, r4["fact_id"])
 	fx.publishFact(paymentStream, fundFact, core.Payment, v4["fact_id"].(string), v4)
 	fx.posted(v4["fact_id"].(string))
-	assert.Equal(t, "cancelled", fx.get("/api/finance/open-items/"+c4["id"].(string))["state"])
+	assert.Equal(t, "cancelled", fx.get("/api/finance/open-items/" + c4["id"].(string))["state"])
 
 	// ST02: a receipt with no payer: held in suspense, nothing allocated
 	s1 := fx.fund("receipt", "70", nil, nil, nil)

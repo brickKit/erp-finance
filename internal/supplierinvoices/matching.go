@@ -112,9 +112,23 @@ func orZero(s string) string {
 	return s
 }
 
+// changed reports whether a matching's results differ from the ones the invoice holds.
+func changed(v Invoice, results []*Result) bool {
+	for i, l := range v.Lines {
+		was, _ := json.Marshal(l.Match)
+		now, _ := json.Marshal(results[i])
+		if string(was) != string(now) {
+			return true
+		}
+	}
+	return false
+}
+
 // record writes each line's matching and the invoice's state after it (matched or mismatch); the one writer of a
-// matching's outcome.
+// matching's outcome. An approved difference is of the results it was given on (SI04): results that changed take it
+// back.
 func record(ctx context.Context, tx db.Tx, v Invoice, results []*Result, ok bool) error {
+	clear := changed(v, results)
 	for i, l := range v.Lines {
 		b, err := json.Marshal(results[i])
 		if err != nil {
@@ -131,7 +145,8 @@ func record(ctx context.Context, tx db.Tx, v Invoice, results []*Result, ok bool
 	if !ok {
 		state = Mismatch
 	}
-	_, err := tx.Exec(ctx, `UPDATE supplier_invoice SET state = $2, version = version + 1, updated_at = now() WHERE id = $1`,
-		v.ID, state)
+	_, err := tx.Exec(ctx, `UPDATE supplier_invoice SET state = $2, version = version + 1, updated_at = now(),
+		difference_approved_by = CASE WHEN $3 THEN NULL ELSE difference_approved_by END,
+		difference_reason = CASE WHEN $3 THEN NULL ELSE difference_reason END WHERE id = $1`, v.ID, state, clear)
 	return err
 }

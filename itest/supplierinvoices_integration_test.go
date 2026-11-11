@@ -142,6 +142,29 @@ func (fx *fixture) supplierInvoices() {
 	assert.Equal(t, 400, code, out, "a reason is required")
 	diff = fx.siAction(fx.bob, did, "approve-difference", map[string]any{"reason": "供应商多送的一箱，留下"})
 	assert.NotNil(t, diff["difference_approved_by"])
+	// SI04: an approval is of the difference it saw. Another box received (108 EA: 0.6 BX invoiceable): posting
+	// matches again, records the new result, takes the approval back and does not post; matching again after a new
+	// approval takes it back too when the result changes
+	more := func(base string) *purchasev3.BasisLine {
+		return goodsBasis(base, &purchasev3.ReceiptMovement{MovementId: m1, ReceiptLineId: r1, ReceivedBaseQuantity: "60",
+			ReturnedBaseQuantity: "0"}, &purchasev3.ReceiptMovement{MovementId: m2, ReceiptLineId: r2, ReceivedBaseQuantity: "36",
+			ReturnedBaseQuantity: "0"})
+	}
+	fx.purchase.set(more("108"))
+	diff = fx.siAction(fx.alice, did, "post", nil)
+	assert.Equal(t, "mismatch", diff["state"], diff)
+	assert.Equal(t, "0.6", at(diff, "lines", 0, "match", "invoiceable_quantity"))
+	assert.Nil(t, diff["difference_approved_by"], "the approval was of another difference")
+	fx.siRefused(fx.alice, did, "post", nil)
+	diff = fx.siAction(fx.bob, did, "approve-difference", map[string]any{"reason": "供应商多送的，留下"})
+	fx.purchase.set(more("96"))
+	diff = fx.siAction(fx.alice, did, "match", nil)
+	assert.Equal(t, "0", at(diff, "lines", 0, "match", "invoiceable_quantity"))
+	assert.Nil(t, diff["difference_approved_by"], "a changed result takes the approval back")
+	diff = fx.siAction(fx.alice, did, "match", nil)
+	diff = fx.siAction(fx.bob, did, "approve-difference", map[string]any{"reason": "供应商多送的一箱，留下"})
+	diff = fx.siAction(fx.alice, did, "match", nil)
+	assert.NotNil(t, diff["difference_approved_by"], "the same result keeps the approval")
 	diff = fx.siAction(fx.alice, did, "post", nil)
 	assert.Equal(t, "posted", diff["state"])
 	fx.noFact(at(diff["lines"].([]any)[0], "id").(string), core.PriceConfirmed)

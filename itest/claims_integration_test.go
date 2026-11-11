@@ -72,7 +72,7 @@ func (fx *fixture) claims() {
 	_, err = pay.Confirm(fx.ctx, &financev3.ConfirmRequest{ClaimId: c3})
 	fx.claimReason(err, "CLAIM_STATE")
 	fx.claimRefused(pay, c3, payable, "300", "CLAIM_STATE")
-	assert.Equal(t, "985.2", fx.get("/api/finance/open-items/"+payable)["available"])
+	assert.Equal(t, "985.2", fx.get("/api/finance/open-items/" + payable)["available"])
 
 	// CL03: an unknown claim: Get answers NOT_FOUND, the commands CLAIM_STATE
 	_, err = pay.Get(fx.ctx, &financev3.GetRequest{ClaimId: ids.New().String()})
@@ -83,7 +83,7 @@ func (fx *fixture) claims() {
 	// CL05: a pending claim expires after its period, its amount back; the confirmed one stays
 	c4 := ids.New().String()
 	fx.claim(pay, c4, payable, "100")
-	assert.Equal(t, "885.2", fx.get("/api/finance/open-items/"+payable)["available"])
+	assert.Equal(t, "885.2", fx.get("/api/finance/open-items/" + payable)["available"])
 	require.Eventually(t, func() bool {
 		g, err := pay.Get(fx.ctx, &financev3.GetRequest{ClaimId: c4})
 		return err == nil && g.GetClaim().GetState() == "expired"
@@ -113,7 +113,7 @@ func (fx *fixture) claims() {
 	rel, err = pay.Release(fx.ctx, &financev3.ReleaseRequest{ClaimId: c1})
 	require.NoError(t, err)
 	assert.Equal(t, "released", rel.GetClaim().GetState())
-	assert.Equal(t, "1585.2", fx.get("/api/finance/open-items/"+payable)["available"])
+	assert.Equal(t, "1585.2", fx.get("/api/finance/open-items/" + payable)["available"])
 
 	// the due open items: Shanghai's payables due today, earliest first, a page of one at a time
 	today := fx.today()

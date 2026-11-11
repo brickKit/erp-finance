@@ -27,12 +27,14 @@ func post(m *core.Base, ctx context.Context, tx db.Tx, v Invoice, ev evidence, d
 			return err
 		}
 	}
-	if v.State == Matched {
+	if len(orderLines) > 0 { // matched again under the locks: a matched invoice that no longer matches, or an approved
+		// difference whose results changed, goes back to mismatch unposted (SI03, SI04)
 		invoiced, err := invoicedOf(ctx, tx, orderLines)
 		if err != nil {
 			return err
 		}
-		if results, ok := evaluate(v, ev.basis, invoiced, m.ToleranceOf(v.LegalEntityID)); !ok {
+		results, ok := evaluate(v, ev.basis, invoiced, m.ToleranceOf(v.LegalEntityID))
+		if (v.State == Matched && !ok) || (v.State == Mismatch && changed(v, results)) {
 			return record(ctx, tx, v, results, false)
 		}
 	}

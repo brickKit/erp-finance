@@ -158,7 +158,7 @@ func start(t *testing.T) *fixture {
 		"FINANCE_FACT_SOURCES": `[{"stream": "erp.payment", "type": "erp.payment.fund_fact.v1"},
 			{"stream": "erp.payment", "type": "erp.payment.accounting_fact.v1"}]`,
 		// a pending claim expires after 4 s here (CL05), 7 days by default
-		"CLAIM_PERIOD": "4s",
+		"CLAIM_PERIOD":     "4s",
 		"MATCH_TOLERANCES": `{"` + fx.le + `": {"quantity_percent": "5", "price_percent": "0"}}`} {
 		env[k] = v
 	}

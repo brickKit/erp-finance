@@ -19,7 +19,8 @@
 
 - 数量按订单行的单位。货物的可开票数量 = 已收（基本单位，净额）换算到订单单位（`toOrderUnit`，用依据里的 `ordered_quantity` 与 `ordered_base_quantity`）− 已过账开票的（`invoiced_line`）；服务的 = 已验收 − 已开票。不低于 0。
 - 容差来自 `core.Base.ToleranceOf`（配置键 `MATCH_TOLERANCES`，启动时读一次）。
-- 过账前同一订单行的过账按行排队（事务级的 advisory lock，按行 ID 排序取锁），已过账的开票数量因此准确；`matched` 的票据在锁里再匹配一次，依据变了就退回 `mismatch`、不过账。
+- 过账前同一订单行的过账按行排队（事务级的 advisory lock，按行 ID 排序取锁），已过账的开票数量因此准确；订单票据在锁里再匹配一次：`matched` 的不再匹配、或已批准差异的结果变了，就退回 `mismatch`、不过账。
+- 批准的差异只对批准时的结果有效（SI04）：`record` 写下的结果与票据原有的不同（`changed`）时清掉批准。
 - 货物行按依据里流水的先后取基本单位数量，每条不超过净收货减去已开票的（`invoiced_movement`）；取到流水的才发布“票据单价确认”，单价换算到每个基本单位（`toBase` 的反方向）。
 
 ## 文件
@@ -30,7 +31,7 @@
 | `lifecycle_test.go` | 单元测试：每一格都定了；设计文档的表与代码逐格相同；每条规则都有集成测试写明 |
 | `records.go` | `Invoice`、`Line`、`Result`；读取的 SQL（`Cols`：合计在 SQL 里算）、`Scan`、`Get`、`Read` |
 | `invoices.go` | 输入与事务外的取证（`prepare`：票据的种类、法人与本位币、伙伴、部门、行金额）；`CreateSupplierInvoice`（幂等，内部号 `SI`）、`GetSupplierInvoice`、`UpdateSupplierInvoice`、`ListSupplierInvoices`；`taken`（供应商票据号重复 → `CODE_TAKEN`） |
-| `matching.go` | `invoicedOf`、`toOrderUnit`、`toBase`、`evaluate`（每行的结果）、`record` |
+| `matching.go` | `invoicedOf`、`toOrderUnit`、`toBase`、`evaluate`（每行的结果）、`changed`（结果变了没有）、`record` |
 | `actions.go` | `Action`、`gather`、`guard`、`match`、`setState` |
 | `posting.go` | `post`、`voucher`（规则 `supplier_invoice`）、`invoiced`（开票数量、流水分配与票据单价确认） |
 
