@@ -84,6 +84,11 @@
         "net_of_tax"
       ]
     },
+    "business_date": {
+      "type": "string",
+      "format": "date",
+      "description": "the invoice date (contract alpha.4, erp/finance 3.0.6): erp/costing dates the adjustment by it (protocol 05b, IC29); absent in facts published before"
+    },
     "recorded_at": {
       "type": "string",
       "format": "date-time"

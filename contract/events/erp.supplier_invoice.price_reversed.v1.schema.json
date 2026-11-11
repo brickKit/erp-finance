@@ -28,6 +28,11 @@
     "reason": {
       "type": "string"
     },
+    "business_date": {
+      "type": "string",
+      "format": "date",
+      "description": "the date of the correction (contract alpha.4): erp/costing dates the adjustment by it; absent in facts published before"
+    },
     "recorded_at": {
       "type": "string",
       "format": "date-time"
