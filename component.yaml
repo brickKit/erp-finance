@@ -4,7 +4,7 @@ kind: Component
 metadata:
   id: erp/finance
   name: Finance
-  version: 3.0.16
+  version: 3.0.17
   description: "One ledger per legal entity: the chart of accounts, posting rules, periods and vouchers; receivables from issued invoices, payables from supplier invoices matched against purchase orders, the payment claims erp/payment makes and the settlement of its fund facts; the shared accounting fact contract the sources publish under (protocol 05)"
   repository: https://github.com/brickKit/erp-finance
 
@@ -13,7 +13,7 @@ dependencies:
     - mdm/currency@3.0.40
     - mdm/org@3.0.42
     - mdm/partner@3.0.47
-    - id: erp/purchase@3.0.15
+    - id: erp/purchase@3.0.17
       optional: true
 
 events:
