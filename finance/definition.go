@@ -18,7 +18,7 @@ import (
 
 // Identity.
 const (
-	Version  = "3.0.22"
+	Version  = "3.0.23"
 	GRPCPort = 9097
 )
 
